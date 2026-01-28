@@ -17,7 +17,9 @@ namespace LootWithFriends
         {
             var sb = new StringBuilder();
             DumpObjectInternal(obj, sb, 0, new HashSet<object>());
-            File.WriteAllText(fileName, sb.ToString());
+            File.WriteAllText(Path.Combine(
+                Application.persistentDataPath,
+                fileName), sb.ToString());
         }
 
         private static void DumpObjectInternal(

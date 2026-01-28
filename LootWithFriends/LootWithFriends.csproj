@@ -35,16 +35,25 @@
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>H:\SteamLibrary\steamapps\common\7 Days To Die\7DaysToDie_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
     </Reference>
+    <Reference Include="UnityEngine.JSONSerializeModule">
+      <HintPath>H:\SteamLibrary\steamapps\common\7 Days To Die\7DaysToDie_Data\Managed\UnityEngine.JSONSerializeModule.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
   <!-- NuGet reference to System.Memory to fix ReadOnlySpan<T> -->
   <ItemGroup>
+    <PackageReference Include="Lib.Harmony" Version="2.4.2" />
     <PackageReference Include="System.Memory" Version="4.5.5" />
   </ItemGroup>
 
-  <!-- Ensure ModInfo.xml goes to bin -->
+  <!-- Ensure ModInfo.xml is copied to output -->
   <ItemGroup>
     <Content Include="ModInfo.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <!-- XUi XML files -->
+    <Content Include="Config\XUi\**\*.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
@@ -53,29 +62,30 @@
     <LocalModDir>H:\SteamLibrary\steamapps\common\7 Days To Die\Mods\LootWithFriends</LocalModDir>
     <ShareModDir>\\MEDUSA\BubShare\LootWithFriends</ShareModDir>
   </PropertyGroup>
-  
-  <!-- Copy mod artifacts to Mods folder -->
+
   <Target Name="PostBuildCopy" AfterTargets="Build">
     <ItemGroup>
       <ModFiles Include="$(TargetPath)" />
       <ModFiles Include="$(TargetDir)$(TargetName).pdb"
                 Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
       <ModFiles Include="$(TargetDir)ModInfo.xml" />
+
     </ItemGroup>
 
+    <!-- Local deploy -->
     <Message Text="Deploying mod to local Mods folder" Importance="High" />
-    <MakeDir Directories="$(LocalModDir)" Condition="!Exists('$(LocalModDir)')" />
+
     <Copy SourceFiles="@(ModFiles)"
           DestinationFolder="$(LocalModDir)"
           SkipUnchangedFiles="true" />
 
+    <!-- SMB deploy -->
     <Message Text="Deploying mod to SMB share" Importance="High" />
-    <MakeDir Directories="$(ShareModDir)" Condition="!Exists('$(ShareModDir)')" />
+
     <Copy SourceFiles="@(ModFiles)"
           DestinationFolder="$(ShareModDir)"
           SkipUnchangedFiles="true" />
+
   </Target>
-
-
 
 </Project>

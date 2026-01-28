@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using UnityEngine;
 
 namespace LootWithFriends
 {
@@ -21,47 +22,85 @@ namespace LootWithFriends
                 "cb (nearest player → you)";
         }
 
+        public void DropLootBag(EntityPlayer player, ItemStack[] items)
+        {
+            Vector3 position = GetGroundPositionInFrontOfPlayer(player);
+
+            foreach (EntityLootContainer container in GameManager.Instance.DropContentInLootContainerServer(
+                         -1,
+                         "DroppedVehicleContainer",
+                         position,
+                         items,
+                         false,
+                         null 
+                     ))
+            {
+                container.SetVelocity(Vector3.zero);
+            }
+        }
+
+        private static Vector3 GetGroundPositionInFrontOfPlayer(EntityPlayer player, float forward = 1.5f)
+        {
+            Vector3 pos = player.position + player.GetForwardVector() * forward;
+
+            World world = player.world;
+
+            int x = Utils.Fastfloor(pos.x);
+            int z = Utils.Fastfloor(pos.z);
+
+            // Get terrain height
+            var y = world.GetHeightAt(x, z);
+
+            // Walk upward until we find air above solid (handles snow, shapes, etc.)
+            while (y < 255)
+            {
+                BlockValue block = world.GetBlock(new Vector3i(x, y, z));
+                if (!block.isair)
+                    y++;
+                else
+                    break;
+            }
+
+            return new Vector3(pos.x + 0.5f, y + 0.05f, pos.z + 0.5f);
+        }
+
         public override void Execute(List<string> parameters, CommandSenderInfo senderInfo)
         {
+            Log.Out($"IsServer: {ConnectionManager.Instance.IsServer}");
+
             EntityPlayer fromPlayer = ConnectionManager.Instance.IsServer
                 ? GameManager.Instance.myEntityPlayerLocal
                 : GameManager.Instance.World.Players.dict[senderInfo.RemoteClientInfo.entityId];
 
-            EntityPlayer nearest = FindNearestOtherPlayer(fromPlayer);
-
-            if (nearest == null)
-            {
-                Log.Out("No other players nearby.");
-                return;
-            }
+            Log.Out($"FromPlayer: {fromPlayer.entityId}");
 
             if (ConnectionManager.Instance.IsServer)
             {
-                // We are host/server
-                BagOperations.CombineBags(fromPlayer, nearest);
-                Log.Out("Combine Bags executed directly on server.");
-            }
-            else if (senderInfo.RemoteClientInfo != null)
-            {
-                // We are client: send NetPackage to server
-                SendPackage(fromPlayer.entityId, nearest.entityId);
-                Log.Out("Combine Bags package sent to server.");
+                var stacksToDrop = new List<ItemStack>();
+
+                //testing to make sure we can drop like this
+                foreach (var stack in fromPlayer.bag.items)
+                {
+                    if (stack == null || stack.count <= 0)
+                        continue;
+
+                    int dropCount = stack.count;
+                    stacksToDrop.Add(stack.Clone());
+                    
+                    fromPlayer.bag.DecItem(stack.itemValue, dropCount);
+                }
+
+                DropLootBag(fromPlayer, stacksToDrop.ToArray());
+
+                //var toDrop = ItemDrop.WhatShouldIDrop(fromPlayer.entityId);
             }
             else
             {
-                Log.Error("Not executed on server, but senderInfo.RemoteClientInfo is null.");
-                return;
+                var pkg = new NetPackageClientWantsToDropStuff(senderInfo.RemoteClientInfo.entityId);
+                ConnectionManager.Instance.SendToServer(pkg);
             }
-
-            SdtdConsole.Instance.Output(
-                $"Finished cb command for: {fromPlayer.EntityName} → {nearest.EntityName}");
         }
 
-        private static void SendPackage(int fromId, int toId)
-        {
-            var pkg = new NetPackageCombineBags(fromId, toId);
-            ConnectionManager.Instance.SendToServer(pkg);
-        }
 
         private static EntityPlayer FindNearestOtherPlayer(EntityPlayer self)
         {
