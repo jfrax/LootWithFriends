@@ -1,0 +1,261 @@
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using Newtonsoft.Json;
+using UniLinq;
+using UnityEngine;
+
+namespace LootWithFriends
+{
+    public class Affinity
+    {
+        public string PlayerId { get; set; } = "";
+        public List<string> PreferReceiving { get; set; } = new List<string>();
+        public List<string> PreferDropping { get; set; } = new List<string>();
+
+        private static List<Affinity> _cache;
+        private static bool _isDirty;
+
+        private static string ModSaveDir =>
+            Path.Combine(GameIO.GetSaveGameDir(), "Mods", "LootWithFriends");
+
+        private static string AffinityFile =>
+            Path.Combine(ModSaveDir, "affinities.json");
+
+        public static void SetAffinity(EntityPlayer player, ItemClass itemClass, AffinityTypes affinityType)
+        {
+            LoadIfNeeded();
+
+            if (!ConnectionManager.Instance.IsServer && _cache == null)
+            {
+                //local cache should have been set already from PlayerJoinedGame
+                Log.Error("LootWithFriends: Client Affinity Cache Was Null in SetAffinity");
+                return;
+            }
+
+            //either way (client or server), update the local cache
+            var playerId = player.PlayerDisplayName;
+            var entry = _cache.FirstOrDefault(p => p.PlayerId == playerId);
+            if (entry == null)
+            {
+                entry = new Affinity() { PlayerId = playerId };
+                _cache.Add(entry);
+            }
+
+            entry.PreferDropping.Remove(itemClass.Name);
+            entry.PreferReceiving.Remove(itemClass.Name);
+
+            if (affinityType == AffinityTypes.PreferDropping)
+                entry.PreferDropping.Add(itemClass.Name);
+            else if (affinityType == AffinityTypes.PreferReceiving)
+                entry.PreferReceiving.Add(itemClass.Name);
+
+            _isDirty = true;
+
+            if (!ConnectionManager.Instance.IsServer)
+            {
+
+                //send netpackage to let server know about change in affinity
+                var pkg = NetPackageManager.GetPackage<NetPackageClientChangedAffinity>().Setup(player.PlayerDisplayName,
+                    itemClass.Name,
+                    affinityType);
+                
+                ConnectionManager.Instance.SendToServer(pkg);
+            }
+        }
+
+        public static AffinityTypes GetAffinity(EntityPlayer player, string itemClassName)
+        {
+            LoadIfNeeded();
+
+            if (_cache == null)
+            {
+                Log.Error("Cache was null in GetAffinity");
+                return AffinityTypes.NoPreference;
+            }
+            
+            string playerId = player.PlayerDisplayName;
+
+            Log.Out($"GetAffinity For {playerId} on {itemClassName}");
+            
+            var entry = _cache.FirstOrDefault(p => p.PlayerId == playerId);
+
+            if (entry == null)
+            {
+                Log.Out($"GetAffinity - entry was null");
+                return AffinityTypes.NoPreference;
+            }
+
+
+            if (entry.PreferDropping?.Contains(itemClassName) ?? false)
+            {
+                Log.Out($"GetAffinity - entry had PreferDropping");
+                return AffinityTypes.PreferDropping;
+            }
+
+
+            if (entry.PreferReceiving?.Contains(itemClassName) ?? false)
+            {
+                Log.Out($"GetAffinity - entry had PreferReceiving");
+                return AffinityTypes.PreferReceiving;
+            }
+                
+            Log.Out($"GetAffinity - entry got to the end, returning NoPreference");
+            
+            return AffinityTypes.NoPreference;
+        }
+
+        public static Affinity GetAffinitiesForPlayer(EntityPlayer player)
+        {
+            Log.Out($"GetAffinitiesForPlayer was called for: {player.PlayerDisplayName}");
+            
+            LoadIfNeeded();
+            return _cache.FirstOrDefault(x => x.PlayerId == player.PlayerDisplayName) ??
+                   new Affinity() { PlayerId = player.PlayerDisplayName };
+        }
+
+        public static void ClientSetAffinitiesForPlayer(EntityPlayer player, Affinity affinities)
+        {
+            if (ConnectionManager.Instance.IsServer)
+            {
+                Log.Error("SetAffinitiesForPlayer was run on server! This should only run on clients.");
+            }
+
+            _cache = new List<Affinity>()
+            {
+                affinities
+            };
+        }
+
+        public static void ServerUpdateAffinitiesForPlayer(AffinityChange change)
+        {
+            if (!ConnectionManager.Instance.IsServer)
+            {
+                Log.Error("ServerUpdateAffinitiesForPlayer was run on the client!");
+                return;
+            }
+            
+            LoadIfNeeded();
+            var affinity = _cache.FirstOrDefault(x => x.PlayerId == change.PlayerName);
+            if (affinity == null)
+            {
+                //need to create entry for new player
+                affinity = new Affinity() { PlayerId = change.PlayerName };
+                _cache.Add(affinity);
+            }
+            
+            affinity.PreferDropping.RemoveAll(x => x == change.ItemClassName);
+            affinity.PreferReceiving.RemoveAll(x => x == change.ItemClassName);
+
+            if (change.AffinityType == AffinityTypes.PreferDropping)
+            {
+                affinity.PreferDropping.Add(change.ItemClassName);
+            }
+            else if (change.AffinityType == AffinityTypes.PreferReceiving)
+            {
+                affinity.PreferReceiving.Add(change.ItemClassName);
+            }
+
+            _isDirty = true;
+
+            //no need to update further if it is NoPref since we just removed all existing affinities of that class
+
+        }
+
+        public static void PreFetchClientPlayerAffinity()
+        {
+            if (ConnectionManager.Instance.IsServer)
+            {
+                LoadIfNeeded();
+            }
+            else
+            {
+                Log.Out("Client about to request affinities");
+                var pkg = NetPackageManager.GetPackage<NetPackageClientRequestingAffinities>()
+                    .Setup(GameManager.Instance.myEntityPlayerLocal.entityId);
+                ConnectionManager.Instance.SendToServer(pkg);
+            }
+        }
+
+        private static void LoadIfNeeded()
+        {
+            if (_cache != null)
+                return;
+
+            if (!ConnectionManager.Instance.IsServer)
+                return;
+
+            if (!Directory.Exists(ModSaveDir))
+                Directory.CreateDirectory(ModSaveDir);
+
+            if (File.Exists(AffinityFile))
+            {
+                string json = File.ReadAllText(AffinityFile);
+                _cache = JsonConvert.DeserializeObject<List<Affinity>>(json);
+            }
+
+            if (_cache == null)
+                _cache = new List<Affinity>();
+        }
+
+        public static void FlushToDisk()
+        {
+            if (!ConnectionManager.Instance.IsServer)
+                return;
+
+            if (!_isDirty || _cache == null)
+                return;
+
+            if (!Directory.Exists(ModSaveDir))
+                Directory.CreateDirectory(ModSaveDir);
+
+            string json = JsonConvert.SerializeObject(_cache,  Formatting.Indented);
+            File.WriteAllText(AffinityFile, json);
+
+            _isDirty = false;
+        }
+
+        public static bool ShouldDropItemStack(EntityPlayer requestorPlayer, EntityPlayer otherPlayer, ItemStack itemStack)
+        {
+            var itemName = itemStack?.itemValue?.ItemClass?.Name;
+            Log.Out("ShouldDropItemStack Evaluating: " + itemName);
+            if (string.IsNullOrEmpty(itemName))
+                return false;
+            
+            if (!ConnectionManager.Instance.IsServer)
+            {
+                Log.Error("ShouldDropItemClass called from non-server!");
+                return false;
+            }
+            
+            var aff = Affinity.GetAffinity(requestorPlayer, itemName);
+            
+            Log.Out($"Affinity: {aff}");
+            
+            //1 - drop items that the player wants to get rid of
+            if (aff == AffinityTypes.PreferDropping)
+            {
+                return true;
+            }
+
+            //2 - drop items that the other player wants to recieve and we do NOT also want to receive (dropper's preferences win)
+            if (otherPlayer != null)
+            {
+                var otherPlayerAff = Affinity.GetAffinity(otherPlayer, itemName);
+                if (otherPlayerAff == AffinityTypes.PreferReceiving && aff != AffinityTypes.PreferReceiving)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    public enum AffinityTypes
+    {
+        PreferDropping,
+        PreferReceiving,
+        NoPreference
+    }
+}

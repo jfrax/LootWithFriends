@@ -29,6 +29,9 @@
     <Reference Include="LogLibrary">
       <HintPath>H:\SteamLibrary\steamapps\common\7 Days To Die\7DaysToDie_Data\Managed\LogLibrary.dll</HintPath>
     </Reference>
+    <Reference Include="mscorlib">
+      <HintPath>H:\SteamLibrary\steamapps\common\7 Days To Die\7DaysToDie_Data\Managed\mscorlib.dll</HintPath>
+    </Reference>
     <Reference Include="UnityEngine">
       <HintPath>H:\SteamLibrary\steamapps\common\7 Days To Die\7DaysToDie_Data\Managed\UnityEngine.dll</HintPath>
     </Reference>
@@ -43,7 +46,7 @@
   <!-- NuGet reference to System.Memory to fix ReadOnlySpan<T> -->
   <ItemGroup>
     <PackageReference Include="Lib.Harmony" Version="2.4.2" />
-    <PackageReference Include="System.Memory" Version="4.5.5" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.5-beta1" />
   </ItemGroup>
 
   <!-- Ensure ModInfo.xml is copied to output -->
@@ -65,27 +68,35 @@
 
   <Target Name="PostBuildCopy" AfterTargets="Build">
     <ItemGroup>
+      <!-- binaries -->
       <ModFiles Include="$(TargetPath)" />
       <ModFiles Include="$(TargetDir)$(TargetName).pdb"
                 Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
       <ModFiles Include="$(TargetDir)ModInfo.xml" />
 
+      <!-- XUi XMLs -->
+      <XUiFiles Include="$(TargetDir)Config\XUi\**\*.xml" />
     </ItemGroup>
 
     <!-- Local deploy -->
-    <Message Text="Deploying mod to local Mods folder" Importance="High" />
-
     <Copy SourceFiles="@(ModFiles)"
           DestinationFolder="$(LocalModDir)"
           SkipUnchangedFiles="true" />
 
-    <!-- SMB deploy -->
-    <Message Text="Deploying mod to SMB share" Importance="High" />
+    <Copy SourceFiles="@(XUiFiles)"
+          DestinationFiles="@(XUiFiles->'$(LocalModDir)\Config\XUi\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
 
+    <!-- SMB deploy -->
     <Copy SourceFiles="@(ModFiles)"
           DestinationFolder="$(ShareModDir)"
           SkipUnchangedFiles="true" />
 
+    <Copy SourceFiles="@(XUiFiles)"
+          DestinationFiles="@(XUiFiles->'$(ShareModDir)\Config\XUi\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+
   </Target>
+
 
 </Project>

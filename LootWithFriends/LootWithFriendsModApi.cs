@@ -14,23 +14,15 @@ namespace LootWithFriends
     {
         public void InitMod(Mod modInstance)
         {
-            //ModEvents.UnityUpdate.RegisterHandler(ItemDropHelper.ProcessPendingDrops);
-            //ModEvents.PlayerSpawnedInWorld.RegisterHandler(PlayerSpawnedInWorld);
+            ModEvents.PlayerSpawnedInWorld.RegisterHandler(PlayerSpawnedInWorld);
             new Harmony(this.GetType().ToString()).PatchAll(Assembly.GetExecutingAssembly());
             Log.Error($"InitMod Done");
         }
 
-        // [HarmonyPatch(typeof(XUiC_ItemActionList), "Init")]
-        // private static class XUiC_ItemActionList_Init_Patch
-        // {
-        //     private static void Postfix(XUiC_ItemActionList __instance)
-        //     {
-        //         Log.Error($"XUiC_ItemActionList_Init_Patch called");
-        //         // var entry = new XUiC_ItemActionEntry();
-        //         // entry.lblName.text = "HEY CHECK IT!!";
-        //         // __instance.entryList.Add(entry);
-        //     }
-        // }
+        private void PlayerSpawnedInWorld(ref ModEvents.SPlayerSpawnedInWorldData data)
+        {
+            Affinity.PreFetchClientPlayerAffinity();
+        }
 
         [HarmonyPatch(typeof(XUiC_ItemActionList), "SetCraftingActionList")]
         private static class AddLootAffinityAction_Patch
@@ -49,14 +41,25 @@ namespace LootWithFriends
                 if (!(itemController is XUiC_ItemStack stack))
                     return;
 
+                if (!((XUiC_ItemStack)itemController).itemClass.CanStack())
+                    return;
+                
                 // Optional filtering
                 if (stack.ItemStack.IsEmpty())
                     return;
 
+                var player = GameManager.Instance.myEntityPlayerLocal;
+                Log.Out("About to call Affinity.GetAffinity");
+                var aff = Affinity.GetAffinity(player, stack.itemClass.Name);
+                
+                Log.Out("Finished calling Affinity.GetAffinity");
+                
                 __instance.AddActionListEntry(
-                    new ItemActionEntryLootAffinity(itemController)
+                    new ItemActionEntryLootAffinity(itemController, ItemActionEntryLootAffinity.GetTextForAffinity(aff))
                 );
 
+                Log.Out("About to RefreshActionList from AddLootAffinityAction_Patch");
+                
                 __instance.RefreshActionList();
             }
         }
@@ -66,8 +69,39 @@ namespace LootWithFriends
         {
             private static void Postfix()
             {
-                Affinities.FlushToDisk();
+                Affinity.FlushToDisk();
             }
         }
+        
+        [HarmonyPatch(typeof(XUiC_BackpackWindow), nameof(XUiC_BackpackWindow.Init))]
+        public static class BackpackWindow_Init_Patch
+        {
+            static void Postfix(XUiC_BackpackWindow __instance)
+            {
+                var btn = __instance.GetChildById("btnDropWithAffinities");
+                if (btn == null)
+                {
+                    Log.Out("[LootWithFriends] btnDropWithAffinities not found");
+                    return;
+                }
+
+                btn.OnPress += OnDropWithAffinitiesPressed;
+                Log.Out("[LootWithFriends] Drop button wired");
+            }
+
+            private static void OnDropWithAffinitiesPressed(XUiController sender, int mouseButton)
+            {
+                var player = sender?.xui?.playerUI?.entityPlayer;
+                if (player == null)
+                    return;
+
+                Log.Out("[LootWithFriends] Backpack drop button pressed");
+                
+                ItemDrop.PerformDrop(player);
+
+                // LootWithFriendsDropper.DropUsingAffinities(player);
+            }
+        }
+
     }
 }

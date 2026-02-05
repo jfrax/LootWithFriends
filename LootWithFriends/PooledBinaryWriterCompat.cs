@@ -1,4 +1,6 @@
-﻿using System.Text;
+﻿using System;
+using System.Reflection;
+using System.Text;
 
 namespace LootWithFriends
 {
@@ -30,4 +32,18 @@ namespace LootWithFriends
             OutStream.Write(bytes, 0, bytes.Length);
         }
     }
+    
+    public class PooledBinaryWriterCompatWrapper : PooledBinaryWriterCompat
+    {
+        public PooledBinaryWriterCompatWrapper(PooledBinaryWriter baseWriter)
+        {
+            // Use reflection to set the protected OutStream
+            var outStreamField = typeof(PooledBinaryWriter).GetField("OutStream", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
+            if (outStreamField == null)
+                throw new Exception("Cannot find OutStream field");
+
+            outStreamField.SetValue(this, baseWriter.BaseStream);
+        }
+    }
+
 }
