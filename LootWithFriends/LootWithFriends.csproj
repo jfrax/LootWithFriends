@@ -49,7 +49,9 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.5-beta1" />
   </ItemGroup>
 
-  <!-- Ensure ModInfo.xml is copied to output -->
+
+
+  <!-- Ensure ModInfo.xml and config XMLs are copied to output -->
   <ItemGroup>
     <Content Include="ModInfo.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -59,6 +61,8 @@
     <Content Include="Config\XUi\**\*.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+
+    <!-- Nav object configs -->
   </ItemGroup>
 
   <PropertyGroup>
@@ -74,8 +78,9 @@
                 Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
       <ModFiles Include="$(TargetDir)ModInfo.xml" />
 
-      <!-- XUi XMLs -->
+      <!-- XUi XMLs --> 
       <XUiFiles Include="$(TargetDir)Config\XUi\**\*.xml" />
+
     </ItemGroup>
 
     <!-- Local deploy -->
@@ -97,6 +102,7 @@
           SkipUnchangedFiles="true" />
 
   </Target>
+
 
 
 </Project>

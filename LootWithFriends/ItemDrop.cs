@@ -1,6 +1,7 @@
 ﻿using System;
 using UniLinq;
 using System.Collections.Generic;
+using Platform.Steam;
 using UnityEngine;
 
 namespace LootWithFriends
@@ -19,7 +20,7 @@ namespace LootWithFriends
             {
                 var stacksToDrop = new List<ItemStack>();
 
-                var toDrop = ItemDrop.ServerWhatShouldIDrop(requestorPlayer);
+                var toDrop = ServerWhatShouldIDrop(requestorPlayer);
 
                 for (int i = 0; i < requestorPlayer.bag.items.Length; i++)
                 {
@@ -84,9 +85,9 @@ namespace LootWithFriends
             return dropInfo;
         }
         
-        public static void DropLootBag(EntityPlayer player, ItemStack[] items)
+        public static void DropLootBag(EntityPlayer playerDropping, ItemStack[] items)
         {
-            Vector3 position = GetGroundPositionInFrontOfPlayer(player);
+            Vector3 position = GetGroundPositionInFrontOfPlayer(playerDropping);
 
             foreach (EntityLootContainer container in GameManager.Instance.DropContentInLootContainerServer(
                          -1,
@@ -98,39 +99,27 @@ namespace LootWithFriends
                      ))
             {
                 container.SetVelocity(Vector3.zero);
+                //On the server, we will always create waypoint for the local player.
+                LootWaypointManager.AddForLocalPlayer(container, playerDropping.PlayerDisplayName);
+
+                var nearestPlayer = Utilities.FindNearestOtherPlayer(playerDropping);
                 
-                AddWayPoint(container, player, position);
+                
+                if (nearestPlayer != null)
+                {
+                    //also need to let the client know to create their own waypoint
+                    var pkg = NetPackageManager.GetPackage<NetPackageServerSendClientWaypoint>().Setup(container, playerDropping);
+
+                    ConnectionManager.Instance.SendPackage(
+                        pkg,
+                        _onlyClientsAttachedToAnEntity: true,
+                        _attachedToEntityId: nearestPlayer.entityId
+                    );
+                }
             }
         }
 
-        private static void AddWayPoint(EntityLootContainer container, EntityPlayer player, Vector3 position)
-        {
-            // var wp = new Waypoint()
-            // {
-            //     pos = container.pos,
-            //     //icon = this.icon,
-            //     name = AuthoredText.Clone(new AuthoredText(
-            //     {
-            //         Text = $"{player.name}'s Loot Drop"
-            //     })),
-            //     bTracked = this.bTracked,
-            //     ownerId = this.ownerId,
-            //     lastKnownPositionEntityId = this.lastKnownPositionEntityId,
-            //     lastKnownPositionEntityType = this.lastKnownPositionEntityType,
-            //     navObject = this.navObject,
-            //     hiddenOnCompass = this.hiddenOnCompass,
-            //     bIsAutoWaypoint = this.bIsAutoWaypoint,
-            //     bUsingLocalizationId = this.bUsingLocalizationId,
-            //     IsSaved = this.IsSaved,
-            //     inviterEntityId = this.inviterEntityId,
-            //     hiddenOnMap = this.hiddenOnMap
-            // };
-            //
-            // player.Waypoints.Collection.Add(new Waypoint()
-            // {
-            //     
-            // });
-        }
+
 
         private static Vector3 GetGroundPositionInFrontOfPlayer(EntityPlayer player, float forward = 1.5f)
         {

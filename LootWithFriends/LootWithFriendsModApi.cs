@@ -15,6 +15,10 @@ namespace LootWithFriends
         public void InitMod(Mod modInstance)
         {
             ModEvents.PlayerSpawnedInWorld.RegisterHandler(PlayerSpawnedInWorld);
+            ModEvents.GameUpdate.RegisterHandler(OnGameUpdate);
+
+            //LootWaypointManager.RegisterLootBagClasses();
+            
             new Harmony(this.GetType().ToString()).PatchAll(Assembly.GetExecutingAssembly());
             Log.Error($"InitMod Done");
         }
@@ -22,6 +26,11 @@ namespace LootWithFriends
         private void PlayerSpawnedInWorld(ref ModEvents.SPlayerSpawnedInWorldData data)
         {
             Affinity.PreFetchClientPlayerAffinity();
+        }
+        
+        private void OnGameUpdate(ref ModEvents.SGameUpdateData data)
+        {
+            LootWaypointManager.Update();
         }
 
         [HarmonyPatch(typeof(XUiC_ItemActionList), "SetCraftingActionList")]
