@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<configs>
+
+    <append xpath="//window[@name='windowBackpack']//rect[@controller='ContainerStandardControls']">
+        <button
+                name="btnDropWithAffinities"
+                depth="3"
+                sprite="ui_game_symbol_drop"
+                tooltip="LWF: Drop items for nearby friend"
+                pos="200, -22"
+                style="icon32px, press, hover"
+                pivot="center"
+                sound="[paging_click]" />
+    </append>
+
+</configs>

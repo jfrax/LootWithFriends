@@ -1,0 +1,108 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Target .NET Framework 4.8 -->
+    <TargetFramework>net48</TargetFramework>
+
+    <!-- Project output -->
+    <OutputType>Library</OutputType>
+    <RootNamespace>LootWithFriends</RootNamespace>
+
+    <!-- Debugging -->
+    <DebugType>full</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <Optimize>false</Optimize>
+
+    <!-- Language version -->
+    <LangVersion>7.3</LangVersion>
+    <PackageId>LootWithFriends</PackageId>
+  </PropertyGroup>
+
+  <!-- References to 7DTD assemblies -->
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>H:\SteamLibrary\steamapps\common\7 Days To Die\7DaysToDie_Data\Managed\Assembly-CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>H:\SteamLibrary\steamapps\common\7 Days To Die\7DaysToDie_Data\Managed\Assembly-CSharp-firstpass.dll</HintPath>
+    </Reference>
+    <Reference Include="LogLibrary">
+      <HintPath>H:\SteamLibrary\steamapps\common\7 Days To Die\7DaysToDie_Data\Managed\LogLibrary.dll</HintPath>
+    </Reference>
+    <Reference Include="mscorlib">
+      <HintPath>H:\SteamLibrary\steamapps\common\7 Days To Die\7DaysToDie_Data\Managed\mscorlib.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>H:\SteamLibrary\steamapps\common\7 Days To Die\7DaysToDie_Data\Managed\UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>H:\SteamLibrary\steamapps\common\7 Days To Die\7DaysToDie_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.JSONSerializeModule">
+      <HintPath>H:\SteamLibrary\steamapps\common\7 Days To Die\7DaysToDie_Data\Managed\UnityEngine.JSONSerializeModule.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <!-- NuGet reference to System.Memory to fix ReadOnlySpan<T> -->
+  <ItemGroup>
+    <PackageReference Include="Lib.Harmony" Version="2.4.2" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.5-beta1" />
+  </ItemGroup>
+
+
+
+  <!-- Ensure ModInfo.xml and config XMLs are copied to output -->
+  <ItemGroup>
+    <Content Include="ModInfo.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <!-- XUi XML files -->
+    <Content Include="Config\XUi\**\*.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <!-- Nav object configs -->
+  </ItemGroup>
+
+  <PropertyGroup>
+    <LocalModDir>H:\SteamLibrary\steamapps\common\7 Days To Die\Mods\LootWithFriends</LocalModDir>
+    <ShareModDir>\\MEDUSA\BubShare\LootWithFriends</ShareModDir>
+  </PropertyGroup>
+
+  <Target Name="PostBuildCopy" AfterTargets="Build">
+    <ItemGroup>
+      <!-- binaries -->
+      <ModFiles Include="$(TargetPath)" />
+      <ModFiles Include="$(TargetDir)$(TargetName).pdb"
+                Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
+      <ModFiles Include="$(TargetDir)ModInfo.xml" />
+
+      <!-- XUi XMLs --> 
+      <XUiFiles Include="$(TargetDir)Config\XUi\**\*.xml" />
+
+    </ItemGroup>
+
+    <!-- Local deploy -->
+    <Copy SourceFiles="@(ModFiles)"
+          DestinationFolder="$(LocalModDir)"
+          SkipUnchangedFiles="true" />
+
+    <Copy SourceFiles="@(XUiFiles)"
+          DestinationFiles="@(XUiFiles->'$(LocalModDir)\Config\XUi\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+
+    <!-- SMB deploy -->
+    <Copy SourceFiles="@(ModFiles)"
+          DestinationFolder="$(ShareModDir)"
+          SkipUnchangedFiles="true" />
+
+    <Copy SourceFiles="@(XUiFiles)"
+          DestinationFiles="@(XUiFiles->'$(ShareModDir)\Config\XUi\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+
+  </Target>
+
+
+
+</Project>
