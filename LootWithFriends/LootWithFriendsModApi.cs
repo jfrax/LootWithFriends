@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
 
@@ -16,16 +10,13 @@ namespace LootWithFriends
         {
             ModEvents.PlayerSpawnedInWorld.RegisterHandler(PlayerSpawnedInWorld);
             ModEvents.GameUpdate.RegisterHandler(OnGameUpdate);
-
-            //LootWaypointManager.RegisterLootBagClasses();
-            
             new Harmony(this.GetType().ToString()).PatchAll(Assembly.GetExecutingAssembly());
-            Log.Error($"InitMod Done");
+            Log.Error($"LootWithFriends: Mod Initialized");
         }
 
         private void PlayerSpawnedInWorld(ref ModEvents.SPlayerSpawnedInWorldData data)
         {
-            Affinity.PreFetchClientPlayerAffinity();
+            Affinity.PreFetchPlayerAffinity();
         }
         
         private void OnGameUpdate(ref ModEvents.SGameUpdateData data)

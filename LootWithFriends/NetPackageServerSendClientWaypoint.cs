@@ -10,6 +10,7 @@ namespace LootWithFriends
 
         public NetPackage Setup(EntityLootContainer container, EntityPlayer droppingPlayer)
         {
+            NetGuards.ServerOnly("NetPackageServerSendClientWaypoint.Setup");
             containerEntityId = container.entityId;
             droppingPlayerEntityId = droppingPlayer.entityId;
             return this;
@@ -30,19 +31,17 @@ namespace LootWithFriends
 
         public override void ProcessPackage(World world, GameManager callbacks)
         {
-            // CLIENT ONLY
-            if (!ConnectionManager.Instance.IsClient)
-                return;
+            NetGuards.ClientOnly("NetPackageServerSendClientWaypoint.ProcessPackage");
 
             var container = world.GetEntity(containerEntityId) as EntityLootContainer;
             if (container == null)
             {
-                // entity may not have arrived yet — see below
+                Log.Out("Container not found - scheduling retry");
+                // entity may not have arrived yet
                 ScheduleRetry(containerEntityId, droppingPlayerEntityId);
                 return;
             }
-
-            
+            Log.Out("Container found - adding waypoint");
             var player = world.GetEntity(droppingPlayerEntityId) as EntityPlayer;
             LootWaypointManager.AddForLocalPlayer(container, player?.PlayerDisplayName ?? "A Friend");
         }
@@ -56,6 +55,7 @@ namespace LootWithFriends
 
         private static IEnumerator RetryFind(int containerId, int playerId)
         {
+            Log.Out("In RetryFind");
             for (int i = 0; i < 20; i++) // ~2 seconds
             {
                 yield return new WaitForSeconds(0.1f);
@@ -66,6 +66,7 @@ namespace LootWithFriends
 
                 if (container != null && player != null)
                 {
+                    Log.Out("Container found (in RetryFind) - adding waypoint");
                     LootWaypointManager.AddForLocalPlayer(container, player.PlayerDisplayName);
                     yield break;
                 }

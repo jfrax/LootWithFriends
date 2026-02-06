@@ -6,6 +6,7 @@
 
         public NetPackage Setup(bool[] toDrop)
         {
+            NetGuards.ServerOnly("NetPackageServerReplyItemsToDelete.Setup");
             itemsToDrop = toDrop;
             return this;
         }
@@ -32,6 +33,7 @@
 
         public override void ProcessPackage(World _world, GameManager _callbacks)
         {
+            NetGuards.ClientOnly("NetPackageServerReplyItemsToDelete.ProcessPackage");
             ItemDrop.DropItemsAtSlots(itemsToDrop);
         }
 

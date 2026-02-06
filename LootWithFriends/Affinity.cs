@@ -1,9 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 using UniLinq;
-using UnityEngine;
 
 namespace LootWithFriends
 {
@@ -56,7 +54,8 @@ namespace LootWithFriends
             {
 
                 //send netpackage to let server know about change in affinity
-                var pkg = NetPackageManager.GetPackage<NetPackageClientChangedAffinity>().Setup(player.PlayerDisplayName,
+                var pkg = NetPackageManager.GetPackage<NetPackageClientChangedAffinity>().Setup(
+                    player.PlayerDisplayName,
                     itemClass.Name,
                     affinityType);
                 
@@ -116,10 +115,7 @@ namespace LootWithFriends
 
         public static void ClientSetAffinitiesForPlayer(EntityPlayer player, Affinity affinities)
         {
-            if (ConnectionManager.Instance.IsServer)
-            {
-                Log.Error("SetAffinitiesForPlayer was run on server! This should only run on clients.");
-            }
+            NetGuards.ClientOnly(nameof(ClientSetAffinitiesForPlayer));
 
             _cache = new List<Affinity>()
             {
@@ -129,11 +125,7 @@ namespace LootWithFriends
 
         public static void ServerUpdateAffinitiesForPlayer(AffinityChange change)
         {
-            if (!ConnectionManager.Instance.IsServer)
-            {
-                Log.Error("ServerUpdateAffinitiesForPlayer was run on the client!");
-                return;
-            }
+            NetGuards.ServerOnly(nameof(ServerUpdateAffinitiesForPlayer));
             
             LoadIfNeeded();
             var affinity = _cache.FirstOrDefault(x => x.PlayerId == change.PlayerName);
@@ -162,7 +154,7 @@ namespace LootWithFriends
 
         }
 
-        public static void PreFetchClientPlayerAffinity()
+        public static void PreFetchPlayerAffinity()
         {
             if (ConnectionManager.Instance.IsServer)
             {
@@ -217,16 +209,12 @@ namespace LootWithFriends
 
         public static bool ShouldDropItemStack(EntityPlayer requestorPlayer, EntityPlayer otherPlayer, ItemStack itemStack)
         {
+            NetGuards.ServerOnly(nameof(ShouldDropItemStack));
+            
             var itemName = itemStack?.itemValue?.ItemClass?.Name;
             Log.Out("ShouldDropItemStack Evaluating: " + itemName);
             if (string.IsNullOrEmpty(itemName))
                 return false;
-            
-            if (!ConnectionManager.Instance.IsServer)
-            {
-                Log.Error("ShouldDropItemClass called from non-server!");
-                return false;
-            }
             
             var aff = Affinity.GetAffinity(requestorPlayer, itemName);
             

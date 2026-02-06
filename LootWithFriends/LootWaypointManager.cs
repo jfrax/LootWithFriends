@@ -11,10 +11,6 @@ public static class LootWaypointManager
     public static void AddForLocalPlayer(EntityLootContainer container, string creatorName)
     {
         var player = GameManager.Instance.myEntityPlayerLocal;
-
-        //var nm = NavObjectManager.Instance;
-        //Log.Out("Registered classes: " + string.Join(", ", nm. NavObjectList.Select(x => x.name)));
-
         RegisterLootBagClasses();
         var iDroppedIt = creatorName == player.PlayerDisplayName;
         
@@ -72,7 +68,7 @@ public static class LootWaypointManager
             new XAttribute("name", "backpack_self"),
             new XElement("onscreen_settings",
                 new XElement("property", new XAttribute("name", "sprite_name"),
-                    new XAttribute("value", "ui_game_symbol_challenge_homesteading_place_storage")),
+                    new XAttribute("value", "ui_game_symbol_drop")),
                 new XElement("property", new XAttribute("name", "color"), new XAttribute("value", "0,50,199,50")),
                 new XElement("property", new XAttribute("name", "has_pulse"), new XAttribute("value", "false")),
                 new XElement("property", new XAttribute("name", "text_type"), new XAttribute("value", "Distance")),
@@ -81,15 +77,13 @@ public static class LootWaypointManager
         );
 
         NavObjectClassesFromXml.ParseNavObjectClass(selfXml);
-        
-        //ParseNavObjectClass(selfXml);
 
         // Friend backpack
         var friendXml = new XElement("nav_object_class",
             new XAttribute("name", "backpack_friend"),
             new XElement("onscreen_settings",
                 new XElement("property", new XAttribute("name", "sprite_name"),
-                    new XAttribute("value", "ui_game_symbol_backpack")),
+                    new XAttribute("value", "ui_game_symbol_challenge_homesteading_place_storage")),
                 new XElement("property", new XAttribute("name", "color"), new XAttribute("value", "0,255,255,255")),
                 new XElement("property", new XAttribute("name", "has_pulse"), new XAttribute("value", "true")),
                 new XElement("property", new XAttribute("name", "text_type"), new XAttribute("value", "Distance")),
@@ -97,31 +91,6 @@ public static class LootWaypointManager
             )
         );
         NavObjectClassesFromXml.ParseNavObjectClass(friendXml);
-        //ParseNavObjectClass(friendXml);
-    }
-
-    private static void ParseNavObjectClass(XElement e)
-    {
-        string name = e.Attribute("name")?.Value ?? throw new Exception("nav_object_class must have a name attribute");
-
-        NavObjectClass navClass = new NavObjectClass(name);
-        NavObjectClass.NavObjectClassList.Add(navClass);
-
-        foreach (var element in e.Elements())
-        {
-            if (element.Name == "property")
-            {
-                navClass.Properties.Add(element);
-            }
-            else if (element.Name == "onscreen_settings")
-            {
-                NavObjectScreenSettings settings = navClass.OnScreenSettings ?? new NavObjectScreenSettings();
-                NavObjectClassesFromXml.ParseSettings(settings, element);
-                navClass.OnScreenSettings = settings;
-            }
-        }
-
-        navClass.Init();
     }
 }
 

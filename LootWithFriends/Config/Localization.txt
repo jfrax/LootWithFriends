@@ -1,0 +1,5 @@
+﻿Key,English,German,French,Italian,Spanish,Polish,Russian,Japanese,Korean,ChineseSimplified,ChineseTraditional,PortugueseBrazilian,Turkish
+lwfPrefNone,LWF: No Preference,LWF: Keine Präferenz,LWF : Aucune préférence,LWF: Nessuna preferenza,LWF: Sin preferencia,LWF: Brak preferencji,LWF: Без предпочтений,LWF: 指定なし,LWF: 선호 없음,LWF：无偏好,LWF：無偏好,LWF: Sem preferência,LWF: Tercih yok
+lwfPrefDrop,LWF: Prefer Dropping,LWF: Ablegen bevorzugen,LWF : Préférer déposer,LWF: Preferisci lasciare,LWF: Preferir soltar,LWF: Preferuj upuszczanie,LWF: Предпочитать выброс,LWF: ドロップ優先,LWF: 드롭 우선,LWF：优先丢弃,LWF：優先丟棄,LWF: Preferir soltar,LWF: Bırakmayı tercih et
+lwfPrefReceive,LWF: Prefer Receiving,LWF: Empfangen bevorzugen,LWF : Préférer recevoir,LWF: Preferisci ricevere,LWF: Preferir recibir,LWF: Preferuj otrzymywanie,LWF: Предпочитать получение,LWF: 受け取り優先,LWF: 받기 우선,LWF：优先接收,LWF：優先接收,LWF: Preferir receber,LWF: Almayı tercih et
+

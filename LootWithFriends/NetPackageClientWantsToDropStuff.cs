@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using mumblelib;
-using Newtonsoft.Json;
+﻿using System.Text;
 using UniLinq;
 
 namespace LootWithFriends
@@ -16,6 +12,7 @@ namespace LootWithFriends
 
         public NetPackage Setup(EntityPlayer player)
         {
+            NetGuards.ClientOnly("NetPackageClientWantsToDropStuff.Setup");
             requestingPlayerEntityId = player.entityId;
             itemSlotNames = player.bag.items.Select(x => x.IsEmpty() ? string.Empty : x.itemValue.ItemClass.Name).ToArray();
 
@@ -73,66 +70,28 @@ namespace LootWithFriends
 
         public override void ProcessPackage(World world, GameManager callbacks)
         {
-            Log.Out("NetPackageClientWantsToDropStuff : Processing Package");
-            if (!ConnectionManager.Instance.IsServer)
-            {
-                Log.Warning(
-                    "NetPackageClientWantsToDropStuff was being processed on an instance that wasn't the server");
-                return;
-            }
-
+            NetGuards.ServerOnly("NetPackageClientWantsToDropStuff.ProcessPackage");
             var player =
                 GameManager.Instance.World.Players.list.FirstOrDefault(x => x.entityId == requestingPlayerEntityId);
 
             if (player == null)
             {
-                Log.Warning(
-                    $"NetPackageClientWantsToDropStuff unable to find requestingPlayerEntityId {requestingPlayerEntityId}");
+                Log.Warning($"NetPackageClientWantsToDropStuff unable to find requestingPlayerEntityId {requestingPlayerEntityId}");
                 return;
             }
 
             Log.Out($"Processing NetPackageClientWantsToDropStuff - Found Matching Player: {player.PlayerDisplayName}");
 
-            var toDrop = new bool[player.bag.items.Length];
-            var itemsToPutInDroppedLootBag = new List<ItemStack>();
-
-            var nearestPlayer = Utilities.FindNearestOtherPlayer(player);
-
-            Log.Out("Processing NetPackageClientWantsToDropStuff - Looping over slots");
-
-            //while we're on the server, we'll go ahead and drop the bag with a copy of the stuff as we build up the reply info so the client can clear their inventory
-
-            for (int i = 0; i < itemSlotNames.Length; i++)
-            {
-                if (lockedSlots[i])
-                    continue;
-                
-                var className = itemSlotNames[i];
-                if (string.IsNullOrEmpty(className))
-                    continue;
-                
-                var count = stackCounts[i];
-                if (count > 0)
-                {
-                    var newStack = CreateItemStack(className, count);
-                    if (newStack == null)
-                        continue;
-                    toDrop[i] = Affinity.ShouldDropItemStack(player, nearestPlayer, newStack);
-                    if (toDrop[i])
-                    {
-                        itemsToPutInDroppedLootBag.Add(newStack);
-                    }
-                }
-            }
-
-            //now actually drop the loot bag
-            ItemDrop.DropLootBag(player, itemsToPutInDroppedLootBag.ToArray());
-
-            //then tell the client which things to delete
+            var (toDrop, itemsToPutInDroppedLootBag) = 
+                ItemDrop.ServerWhatShouldBeDropped(new ItemDropRequestInfo(player, itemSlotNames, stackCounts, lockedSlots));
+            
             if (toDrop.Any((x => x)))
             {
-                Log.Out("We found at least one item to drop that we need to let the client know about");
+                //now actually drop the loot bag
+                if (!ItemDrop.ServerTryDropLootBag(player, itemsToPutInDroppedLootBag.ToArray()))
+                    return;
 
+                //then tell the client which things to delete
                 var pkg = NetPackageManager.GetPackage<NetPackageServerReplyItemsToDelete>().Setup(toDrop);
 
                 Log.Out(

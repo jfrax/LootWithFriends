@@ -1,7 +1,5 @@
-﻿using System;
-using UniLinq;
+﻿using UniLinq;
 using System.Collections.Generic;
-using Platform.Steam;
 using UnityEngine;
 
 namespace LootWithFriends
@@ -18,30 +16,14 @@ namespace LootWithFriends
             
             if (ConnectionManager.Instance.IsServer)
             {
-                var stacksToDrop = new List<ItemStack>();
-
-                var toDrop = ServerWhatShouldIDrop(requestorPlayer);
-
-                for (int i = 0; i < requestorPlayer.bag.items.Length; i++)
+                var (toDrop, stacksToDrop) = ServerWhatShouldBeDropped(ItemDropRequestInfo.FromServerPlayer(requestorPlayer));
+                
+                if (toDrop.Any(x => x))
                 {
-                    var stack = requestorPlayer.bag.items[i];
-                    if (stack == null || stack.IsEmpty())
-                        continue;
-
-                    if (toDrop[i])
-                    {
-                        stacksToDrop.Add(stack.Clone());
-                        if (requestorPlayer is EntityPlayerLocal)
-                        {
-                            //we are the server player; just drop our items directly
-                            requestorPlayer.bag.SetSlot(i, ItemStack.Empty.Clone());
-                        }
-                    }
-                }
-
-                if (stacksToDrop.Count > 0)
-                {
-                    DropLootBag(requestorPlayer, stacksToDrop.ToArray());
+                    if (!ServerTryDropLootBag(requestorPlayer, stacksToDrop.ToArray()))
+                        return;
+                    
+                    DropItemsAtSlots(toDrop);
                 }
             }
             else
@@ -51,48 +33,65 @@ namespace LootWithFriends
             }
         }
 
-        private static bool[] ServerWhatShouldIDrop(EntityPlayer requestorPlayer)
-        {
-            if (requestorPlayer == null)
-            {
-                Log.Error($"Requestor player null in WhatShouldIDrop");
-            }
-                
-            var nearestPlayer = Utilities.FindNearestOtherPlayer(requestorPlayer);
 
-            //todo: in final version, if nearest player is null, prob don't want to proceed with the drop.
-            //or it can be a config option ideally (could still be useful for solo play to quickly drop nonsense)
-            
-            var slotCount = requestorPlayer.bag.items.Length;
-            var dropInfo = new bool[slotCount];
-            
-            for (int i = 0; i < slotCount; i++)
+        public static (bool[], ItemStack[]) ServerWhatShouldBeDropped(ItemDropRequestInfo itemDropRequestInfo)
+        {
+            NetGuards.ServerOnly(nameof(ServerWhatShouldBeDropped));
+            var toDrop = new bool[itemDropRequestInfo.ItemSlotNames.Length];
+            var itemsToPutInDroppedLootBag = new List<ItemStack>();
+
+            var nearestPlayer = Utilities.FindNearestOtherPlayer(itemDropRequestInfo.RequestorPlayer);
+
+            ItemStack CreateItemStack(string className, int count)
             {
-                if(requestorPlayer.bag.LockedSlots != null && requestorPlayer.bag.LockedSlots[i])
+                ItemClass itemClass = ItemClass.GetItemClass(className);
+                if (itemClass == null)
                 {
-                    dropInfo[i] = false;
-                    continue;
+                    Log.Error($"Invalid item class name: {className}");
+                    return null;
                 }
-                
-                var item = requestorPlayer.bag.items[i];
-                if (item.count > 0)
-                {
-                    Log.Out($"Server thinks player has {item.count} x {item.itemValue.ItemClass.Name} in slot [{i}]");
-                    dropInfo[i] = Affinity.ShouldDropItemStack(requestorPlayer, nearestPlayer, item) ;
-                }
+                ItemValue itemValue = new ItemValue(itemClass.Id, false);
+                ItemStack stack = new ItemStack(itemValue, count);
+                return stack;
             }
             
-            return dropInfo;
+            for (int i = 0; i < itemDropRequestInfo.ItemSlotNames.Length; i++)
+            {
+                if (itemDropRequestInfo.LockedSlots[i])
+                    continue;
+                
+                var className = itemDropRequestInfo.ItemSlotNames[i];
+                if (string.IsNullOrEmpty(className))
+                    continue;
+                
+                var count = itemDropRequestInfo.StackCounts[i];
+                if (count > 0)
+                {
+                    var newStack = CreateItemStack(className, count);
+                    if (newStack == null)
+                        continue;
+                    toDrop[i] = Affinity.ShouldDropItemStack(itemDropRequestInfo.RequestorPlayer, nearestPlayer, newStack);
+                    if (toDrop[i])
+                    {
+                        itemsToPutInDroppedLootBag.Add(newStack);
+                    }
+                }
+            }
+
+            return (toDrop, itemsToPutInDroppedLootBag.ToArray());
+
         }
         
-        public static void DropLootBag(EntityPlayer playerDropping, ItemStack[] items)
+        public static bool ServerTryDropLootBag(EntityPlayer playerDropping, ItemStack[] items)
         {
-            Vector3 position = GetGroundPositionInFrontOfPlayer(playerDropping);
+            NetGuards.ServerOnly(nameof(ServerTryDropLootBag));
+
+            var dropPosition = playerDropping.GetDropPosition();
 
             foreach (EntityLootContainer container in GameManager.Instance.DropContentInLootContainerServer(
                          -1,
                          "DroppedLootContainer",
-                         position,
+                         dropPosition,
                          items,
                          false,
                          null
@@ -117,33 +116,8 @@ namespace LootWithFriends
                     );
                 }
             }
-        }
 
-
-
-        private static Vector3 GetGroundPositionInFrontOfPlayer(EntityPlayer player, float forward = 1.5f)
-        {
-            Vector3 pos = player.position + player.GetForwardVector() * forward;
-
-            World world = player.world;
-
-            int x = Utils.Fastfloor(pos.x);
-            int z = Utils.Fastfloor(pos.z);
-
-            // Get terrain height
-            var y = world.GetHeightAt(x, z);
-
-            // Walk upward until we find air above solid (handles snow, shapes, etc.)
-            while (y < 255)
-            {
-                BlockValue block = world.GetBlock(new Vector3i(x, y, z));
-                if (!block.isair)
-                    y++;
-                else
-                    break;
-            }
-
-            return new Vector3(pos.x + 0.5f, y + 0.05f, pos.z + 0.5f);
+            return true;
         }
 
         public static void DropItemsAtSlots(bool[] itemsToDrop)

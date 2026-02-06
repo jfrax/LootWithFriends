@@ -6,21 +6,20 @@
 
         public static string GetTextForAffinity(AffinityTypes affinity)
         {
-            string result = "LWF: No Pref";
+            string result = "lwfPrefNone";
             
             switch (affinity)
             {
                 case AffinityTypes.NoPreference:
-                    result = "LWF: No Pref";
                     break;
                 case AffinityTypes.PreferDropping:
-                    result = "LWF: PreferDropping";
+                    result = "lwfPrefDrop";
                     break;
                 case  AffinityTypes.PreferReceiving:
-                    result = "LWF: PreferReceiving";
+                    result = "lwfPrefReceive";
                     break;
             }
-            return result;
+            return Localization.Get(result);
         }
         
         private void SetTextForAffinity(AffinityTypes affinity)
@@ -41,12 +40,8 @@
             
         }
         
-        
-
         public override void OnActivated()
         {
-            Log.Out("LootWithFriends: Loot Affinity clicked");
-
             var player = GameManager.Instance.myEntityPlayerLocal;
 
             if (ItemController is XUiC_ItemStack stackController)
@@ -75,8 +70,6 @@
                     SetTextForAffinity(AffinityTypes.NoPreference);
                     Log.Out($"Affinity for {itemClass?.Name} has been set to NoPreference.");
                 }
-
-                Log.Out($"Clicked item: {itemClass?.Name} (id={itemClass?.Id})");
             }
         }
     }
