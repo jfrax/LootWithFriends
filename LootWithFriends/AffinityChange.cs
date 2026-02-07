@@ -2,13 +2,13 @@
 {
     public class AffinityChange
     {
-        public string PlayerName { get; set; }
+        public string PlayerPlatformId { get; set; }
         public string ItemClassName { get; set; }
         public AffinityTypes AffinityType { get; set; }
 
-        public AffinityChange(string playerName, string itemClassName, AffinityTypes affinityType)
+        public AffinityChange(string playerPlatformId, string itemClassName, AffinityTypes affinityType)
         {
-            PlayerName = playerName;
+            PlayerPlatformId = playerPlatformId;
             ItemClassName = itemClassName;
             AffinityType = affinityType;
         }

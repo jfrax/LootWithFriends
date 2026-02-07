@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using mumblelib;
 using UnityEngine;
 
 namespace LootWithFriends
@@ -43,7 +44,7 @@ namespace LootWithFriends
             }
             Log.Out("Container found - adding waypoint");
             var player = world.GetEntity(droppingPlayerEntityId) as EntityPlayer;
-            LootWaypointManager.AddForLocalPlayer(container, player?.PlayerDisplayName ?? "A Friend");
+            LootWaypointManager.AddForLocalPlayer(container, player);
         }
 
         public override int GetLength() => 8;
@@ -67,7 +68,7 @@ namespace LootWithFriends
                 if (container != null && player != null)
                 {
                     Log.Out("Container found (in RetryFind) - adding waypoint");
-                    LootWaypointManager.AddForLocalPlayer(container, player.PlayerDisplayName);
+                    LootWaypointManager.AddForLocalPlayer(container, player);
                     yield break;
                 }
             }
