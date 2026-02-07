@@ -7,18 +7,15 @@ namespace LootWithFriends
 {
     public class Affinity
     {
-        public string PlayerId { get; set; } = "";
+        public string PlayerPlatformId { get; set; } = "";
         public List<string> PreferReceiving { get; set; } = new List<string>();
         public List<string> PreferDropping { get; set; } = new List<string>();
 
         private static List<Affinity> _cache;
         private static bool _isDirty;
 
-        private static string ModSaveDir =>
-            Path.Combine(GameIO.GetSaveGameDir(), "Mods", "LootWithFriends");
-
         private static string AffinityFile =>
-            Path.Combine(ModSaveDir, "affinities.json");
+            Path.Combine(Utilities.ModSaveDir, "affinities.json");
 
         public static void SetAffinity(EntityPlayer player, ItemClass itemClass, AffinityTypes affinityType)
         {
@@ -32,11 +29,11 @@ namespace LootWithFriends
             }
 
             //either way (client or server), update the local cache
-            var playerId = player.PlayerDisplayName;
-            var entry = _cache.FirstOrDefault(p => p.PlayerId == playerId);
+            var playerPlatformId = Utilities.GetStablePlayerId(player);
+            var entry = _cache.FirstOrDefault(p => p.PlayerPlatformId == playerPlatformId);
             if (entry == null)
             {
-                entry = new Affinity() { PlayerId = playerId };
+                entry = new Affinity() { PlayerPlatformId = playerPlatformId };
                 _cache.Add(entry);
             }
 
@@ -55,7 +52,7 @@ namespace LootWithFriends
 
                 //send netpackage to let server know about change in affinity
                 var pkg = NetPackageManager.GetPackage<NetPackageClientChangedAffinity>().Setup(
-                    player.PlayerDisplayName,
+                    Utilities.GetStablePlayerId(player),
                     itemClass.Name,
                     affinityType);
                 
@@ -73,33 +70,25 @@ namespace LootWithFriends
                 return AffinityTypes.NoPreference;
             }
             
-            string playerId = player.PlayerDisplayName;
-
-            Log.Out($"GetAffinity For {playerId} on {itemClassName}");
-            
-            var entry = _cache.FirstOrDefault(p => p.PlayerId == playerId);
+            string playerPlatformId = Utilities.GetStablePlayerId(player);
+            var entry = _cache.FirstOrDefault(p => p.PlayerPlatformId == playerPlatformId);
 
             if (entry == null)
             {
-                Log.Out($"GetAffinity - entry was null");
                 return AffinityTypes.NoPreference;
             }
 
 
             if (entry.PreferDropping?.Contains(itemClassName) ?? false)
             {
-                Log.Out($"GetAffinity - entry had PreferDropping");
                 return AffinityTypes.PreferDropping;
             }
 
 
             if (entry.PreferReceiving?.Contains(itemClassName) ?? false)
             {
-                Log.Out($"GetAffinity - entry had PreferReceiving");
                 return AffinityTypes.PreferReceiving;
             }
-                
-            Log.Out($"GetAffinity - entry got to the end, returning NoPreference");
             
             return AffinityTypes.NoPreference;
         }
@@ -109,8 +98,9 @@ namespace LootWithFriends
             Log.Out($"GetAffinitiesForPlayer was called for: {player.PlayerDisplayName}");
             
             LoadIfNeeded();
-            return _cache.FirstOrDefault(x => x.PlayerId == player.PlayerDisplayName) ??
-                   new Affinity() { PlayerId = player.PlayerDisplayName };
+            var playerPlatformId = Utilities.GetStablePlayerId(player);
+            return _cache.FirstOrDefault(x => x.PlayerPlatformId == playerPlatformId) ??
+                   new Affinity() { PlayerPlatformId = playerPlatformId };
         }
 
         public static void ClientSetAffinitiesForPlayer(EntityPlayer player, Affinity affinities)
@@ -128,11 +118,11 @@ namespace LootWithFriends
             NetGuards.ServerOnly(nameof(ServerUpdateAffinitiesForPlayer));
             
             LoadIfNeeded();
-            var affinity = _cache.FirstOrDefault(x => x.PlayerId == change.PlayerName);
+            var affinity = _cache.FirstOrDefault(x => x.PlayerPlatformId == change.PlayerPlatformId);
             if (affinity == null)
             {
                 //need to create entry for new player
-                affinity = new Affinity() { PlayerId = change.PlayerName };
+                affinity = new Affinity() { PlayerPlatformId = change.PlayerPlatformId };
                 _cache.Add(affinity);
             }
             
@@ -177,8 +167,8 @@ namespace LootWithFriends
             if (!ConnectionManager.Instance.IsServer)
                 return;
 
-            if (!Directory.Exists(ModSaveDir))
-                Directory.CreateDirectory(ModSaveDir);
+            if (!Directory.Exists(Utilities.ModSaveDir))
+                Directory.CreateDirectory(Utilities.ModSaveDir);
 
             if (File.Exists(AffinityFile))
             {
@@ -198,8 +188,8 @@ namespace LootWithFriends
             if (!_isDirty || _cache == null)
                 return;
 
-            if (!Directory.Exists(ModSaveDir))
-                Directory.CreateDirectory(ModSaveDir);
+            if (!Directory.Exists(Utilities.ModSaveDir))
+                Directory.CreateDirectory(Utilities.ModSaveDir);
 
             string json = JsonConvert.SerializeObject(_cache,  Formatting.Indented);
             File.WriteAllText(AffinityFile, json);

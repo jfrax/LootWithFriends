@@ -17,6 +17,7 @@ namespace LootWithFriends
         private void PlayerSpawnedInWorld(ref ModEvents.SPlayerSpawnedInWorldData data)
         {
             Affinity.PreFetchPlayerAffinity();
+            LootWaypointManager.LoadWaypoints();
         }
         
         private void OnGameUpdate(ref ModEvents.SGameUpdateData data)
@@ -70,6 +71,7 @@ namespace LootWithFriends
             private static void Postfix()
             {
                 Affinity.FlushToDisk();
+                LootWaypointManager.SaveWaypoints();
             }
         }
         

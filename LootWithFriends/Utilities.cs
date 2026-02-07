@@ -1,10 +1,26 @@
 ﻿using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 
 namespace LootWithFriends
 {
     public static class Utilities
     {
+        
+        public static string ModSaveDir =>
+            Path.Combine(GameIO.GetSaveGameDir(), "Mods", "LootWithFriends");
+
+        public static string GetStablePlayerId(EntityPlayer player)
+        {
+            var world = GameManager.Instance.World;
+            var ppd = world.GetGameManager()
+                .GetPersistentPlayerList()
+                .GetPlayerDataFromEntityID(player.entityId);
+
+            return ppd?.PlatformData.PrimaryId.CombinedString;
+        }
+
+        
         public static EntityPlayer FindNearestOtherPlayer(EntityPlayer self)
         {
             float bestDistSq = float.MaxValue;

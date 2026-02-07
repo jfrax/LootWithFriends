@@ -80,8 +80,6 @@ namespace LootWithFriends
                 return;
             }
 
-            Log.Out($"Processing NetPackageClientWantsToDropStuff - Found Matching Player: {player.PlayerDisplayName}");
-
             var (toDrop, itemsToPutInDroppedLootBag) = 
                 ItemDrop.ServerWhatShouldBeDropped(new ItemDropRequestInfo(player, itemSlotNames, stackCounts, lockedSlots));
             
@@ -93,9 +91,6 @@ namespace LootWithFriends
 
                 //then tell the client which things to delete
                 var pkg = NetPackageManager.GetPackage<NetPackageServerReplyItemsToDelete>().Setup(toDrop);
-
-                Log.Out(
-                    "Processing NetPackageClientWantsToDropStuff - Setup NetPackageServerReplyItemsToDelete, getting ready to send");
 
                 ConnectionManager.Instance.SendPackage(
                     pkg,

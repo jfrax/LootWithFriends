@@ -98,12 +98,11 @@ namespace LootWithFriends
                      ))
             {
                 container.SetVelocity(Vector3.zero);
+                
                 //On the server, we will always create waypoint for the local player.
-                LootWaypointManager.AddForLocalPlayer(container, playerDropping.PlayerDisplayName);
+                LootWaypointManager.AddForLocalPlayer(container, playerDropping);
 
                 var nearestPlayer = Utilities.FindNearestOtherPlayer(playerDropping);
-                
-                
                 if (nearestPlayer != null)
                 {
                     //also need to let the client know to create their own waypoint

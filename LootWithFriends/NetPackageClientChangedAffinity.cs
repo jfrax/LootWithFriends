@@ -7,10 +7,10 @@ namespace LootWithFriends
     {
         private string affinityChangeJson;
         
-        public NetPackage Setup(string playerName, string itemClassName, AffinityTypes affinityType)
+        public NetPackage Setup(string playerPlatformId, string itemClassName, AffinityTypes affinityType)
         {
             NetGuards.ClientOnly("NetPackageClientChangedAffinity.Setup");
-            affinityChangeJson = JsonConvert.SerializeObject(new AffinityChange(playerName, itemClassName, affinityType));
+            affinityChangeJson = JsonConvert.SerializeObject(new AffinityChange(playerPlatformId, itemClassName, affinityType));
             return this;
         }
         
