@@ -6,17 +6,17 @@
 
         public static string GetTextForAffinity(AffinityTypes affinity)
         {
-            string result = "lwfPrefNone";
+            string result = "lwf.affinities.PrefNone";
             
             switch (affinity)
             {
                 case AffinityTypes.NoPreference:
                     break;
                 case AffinityTypes.PreferDropping:
-                    result = "lwfPrefDrop";
+                    result = "lwf.affinities.PrefDrop";
                     break;
                 case  AffinityTypes.PreferReceiving:
-                    result = "lwfPrefReceive";
+                    result = "lwf.affinities.PrefReceive";
                     break;
             }
             return Localization.Get(result);

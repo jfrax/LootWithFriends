@@ -75,6 +75,30 @@ namespace LootWithFriends
             }
         }
         
+        [HarmonyPatch(typeof(GameManager), nameof(GameManager.OnApplicationQuit))]
+        public static class GameManager_OnApplicationQuit_Patch
+        {
+            private static void Prefix()
+            {
+                if (!ConnectionManager.Instance.IsClient)
+                    return;
+
+                LootWaypointManager.SaveWaypoints();
+            }
+        }
+        
+        [HarmonyPatch(typeof(ConnectionManager), nameof(ConnectionManager.Disconnect))]
+        public static class ConnectionManager_Disconnect_Patch
+        {
+            private static void Prefix()
+            {
+                if (!ConnectionManager.Instance.IsClient)
+                    return;
+
+                LootWaypointManager.SaveWaypoints();
+            }
+        }
+        
         [HarmonyPatch(typeof(XUiC_BackpackWindow), nameof(XUiC_BackpackWindow.Init))]
         public static class BackpackWindow_Init_Patch
         {

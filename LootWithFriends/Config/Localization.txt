@@ -1,5 +1,6 @@
 ﻿Key,English,German,French,Italian,Spanish,Polish,Russian,Japanese,Korean,ChineseSimplified,ChineseTraditional,PortugueseBrazilian,Turkish
-lwfPrefNone,LWF: No Preference,LWF: Keine Präferenz,LWF : Aucune préférence,LWF: Nessuna preferenza,LWF: Sin preferencia,LWF: Brak preferencji,LWF: Без предпочтений,LWF: 指定なし,LWF: 선호 없음,LWF：无偏好,LWF：無偏好,LWF: Sem preferência,LWF: Tercih yok
-lwfPrefDrop,LWF: Prefer Dropping,LWF: Ablegen bevorzugen,LWF : Préférer déposer,LWF: Preferisci lasciare,LWF: Preferir soltar,LWF: Preferuj upuszczanie,LWF: Предпочитать выброс,LWF: ドロップ優先,LWF: 드롭 우선,LWF：优先丢弃,LWF：優先丟棄,LWF: Preferir soltar,LWF: Bırakmayı tercih et
-lwfPrefReceive,LWF: Prefer Receiving,LWF: Empfangen bevorzugen,LWF : Préférer recevoir,LWF: Preferisci ricevere,LWF: Preferir recibir,LWF: Preferuj otrzymywanie,LWF: Предпочитать получение,LWF: 受け取り優先,LWF: 받기 우선,LWF：优先接收,LWF：優先接收,LWF: Preferir receber,LWF: Almayı tercih et
-
+lwf.affinities.PrefNone,LWF: No Preference,LWF: Keine Präferenz,LWF : Aucune préférence,LWF: Nessuna preferenza,LWF: Sin preferencia,LWF: Brak preferencji,LWF: Без предпочтений,LWF: 指定なし,LWF: 선호 없음,LWF：无偏好,LWF：無偏好,LWF: Sem preferência,LWF: Tercih yok
+lwf.affinities.PrefDrop,LWF: Prefer Dropping,LWF: Ablegen bevorzugen,LWF : Préférer déposer,LWF: Preferisci lasciare,LWF: Preferir soltar,LWF: Preferuj upuszczanie,LWF: Предпочитать выброс,LWF: ドロップ優先,LWF: 드롭 우선,LWF：优先丢弃,LWF：優先丟棄,LWF: Preferir soltar,LWF: Bırakmayı tercih et
+lwf.affinities.PrefReceive,LWF: Prefer Receiving,LWF: Empfangen bevorzugen,LWF : Préférer recevoir,LWF: Preferisci ricevere,LWF: Preferir recibir,LWF: Preferuj otrzymywanie,LWF: Предпочитать получение,LWF: 受け取り優先,LWF: 받기 우선,LWF：优先接收,LWF：優先接收,LWF: Preferir receber,LWF: Almayı tercih et
+lwf.waypoint.loot_drop.self,My Loot Drop,Mein Lootbeutel,Mon butin,Il mio bottino,Mi botín,Mój łup,Мой лут,自分の戦利品,내 전리품,我的战利品,我的戰利品,Meu saque,Benim Ganimetim
+lwf.waypoint.loot_drop.other,{0}'s Loot Drop,{0}s Lootbeutel,Butin de {0},Bottino di {0},Botín de {0},Łup gracza {0},Лут игрока {0},{0}の戦利品,{0}의 전리품,{0} 的战利品,{0} 的戰利品,Saque de {0},{0} adlı oyuncunun ganimeti
