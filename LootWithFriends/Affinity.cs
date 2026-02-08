@@ -95,8 +95,6 @@ namespace LootWithFriends
 
         public static Affinity GetAffinitiesForPlayer(EntityPlayer player)
         {
-            Log.Out($"GetAffinitiesForPlayer was called for: {player.PlayerDisplayName}");
-            
             LoadIfNeeded();
             var playerPlatformId = Utilities.GetStablePlayerId(player);
             return _cache.FirstOrDefault(x => x.PlayerPlatformId == playerPlatformId) ??
@@ -152,7 +150,6 @@ namespace LootWithFriends
             }
             else
             {
-                Log.Out("Client about to request affinities");
                 var pkg = NetPackageManager.GetPackage<NetPackageClientRequestingAffinities>()
                     .Setup(GameManager.Instance.myEntityPlayerLocal.entityId);
                 ConnectionManager.Instance.SendToServer(pkg);
@@ -202,13 +199,10 @@ namespace LootWithFriends
             NetGuards.ServerOnly(nameof(ShouldDropItemStack));
             
             var itemName = itemStack?.itemValue?.ItemClass?.Name;
-            Log.Out("ShouldDropItemStack Evaluating: " + itemName);
             if (string.IsNullOrEmpty(itemName))
                 return false;
             
             var aff = Affinity.GetAffinity(requestorPlayer, itemName);
-            
-            Log.Out($"Affinity: {aff}");
             
             //1 - drop items that the player wants to get rid of
             if (aff == AffinityTypes.PreferDropping)

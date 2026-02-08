@@ -8,21 +8,78 @@ namespace LootWithFriends
     {
         public void InitMod(Mod modInstance)
         {
+            ModEvents.GameStartDone.RegisterHandler(GameStartDone);
             ModEvents.PlayerSpawnedInWorld.RegisterHandler(PlayerSpawnedInWorld);
-            ModEvents.GameUpdate.RegisterHandler(OnGameUpdate);
             new Harmony(this.GetType().ToString()).PatchAll(Assembly.GetExecutingAssembly());
-            Log.Error($"LootWithFriends: Mod Initialized");
+            Log.Out($"LootWithFriends: Mod Initialized");
+            
+        }
+
+        private void GameStartDone(ref ModEvents.SGameStartDoneData data)
+        {
+            if (ConnectionManager.Instance.IsServer)
+            {
+                Affinity.PreFetchPlayerAffinity();
+                Waypoints.LoadWaypoints();
+            }
         }
 
         private void PlayerSpawnedInWorld(ref ModEvents.SPlayerSpawnedInWorldData data)
         {
             Affinity.PreFetchPlayerAffinity();
-            LootWaypointManager.LoadWaypoints();
+
+            if (ConnectionManager.Instance.IsServer)
+            {
+                var playerThatSpawned = Utilities.FindNearestPlayer(data.Position);
+                if (playerThatSpawned != null)
+                {
+                    Waypoints.FetchPlayerWaypoints(playerThatSpawned);    
+                }
+                else
+                {
+                    Log.Warning("Unable to locate player by coordinates in PlayerSpawnedInWorld!");
+                }
+            }
+                
+        }
+
+        [HarmonyPatch(typeof(EntityLootContainer), "removeBackpack")]
+        private static class EntityLootContainer_RemoveBackpack_Patch
+        {
+            private static void Postfix(EntityLootContainer __instance)
+            {
+                if (!ConnectionManager.Instance.IsServer)
+                    return;
+                
+                Waypoints.LootContainerRemoved(__instance);
+            }
         }
         
-        private void OnGameUpdate(ref ModEvents.SGameUpdateData data)
+        [HarmonyPatch(typeof(Entity), "OnAddedToWorld")]
+        private static class Entity_OnAddedToWorld_Patch
         {
-            LootWaypointManager.Update();
+            private static void Postfix(Entity __instance)
+            {
+                //Clients need to check, when an entityitem gets created on their side, if they should update their positional waypoints into waypoints on the container itself
+                if (__instance is EntityLootContainer lootContainer)
+                {
+                    Log.Out("Entity_OnAddedToWorld_Patch - EntityLootContainer added to world!");
+                    Waypoints.UpdateWaypointWithBagReference(lootContainer);
+                }
+            }
+        }
+
+        [HarmonyPatch(typeof(Entity), "OnEntityUnload")]
+        private static class Entity_OnEntityUnload_Patch
+        {
+            private static void Postfix(Entity __instance)
+            {
+                if (__instance is EntityLootContainer container)
+                {
+                    Log.Out("Entity_OnEntityUnload_Patch - EntityLootContainer unloaded!");
+                    Waypoints.UpdateWaypointWithCoordinateReference(container);
+                }
+            }
         }
 
         [HarmonyPatch(typeof(XUiC_ItemActionList), "SetCraftingActionList")]
@@ -71,31 +128,7 @@ namespace LootWithFriends
             private static void Postfix()
             {
                 Affinity.FlushToDisk();
-                LootWaypointManager.SaveWaypoints();
-            }
-        }
-        
-        [HarmonyPatch(typeof(GameManager), nameof(GameManager.OnApplicationQuit))]
-        public static class GameManager_OnApplicationQuit_Patch
-        {
-            private static void Prefix()
-            {
-                if (!ConnectionManager.Instance.IsClient)
-                    return;
-
-                LootWaypointManager.SaveWaypoints();
-            }
-        }
-        
-        [HarmonyPatch(typeof(ConnectionManager), nameof(ConnectionManager.Disconnect))]
-        public static class ConnectionManager_Disconnect_Patch
-        {
-            private static void Prefix()
-            {
-                if (!ConnectionManager.Instance.IsClient)
-                    return;
-
-                LootWaypointManager.SaveWaypoints();
+                Waypoints.SaveWaypoints();
             }
         }
         

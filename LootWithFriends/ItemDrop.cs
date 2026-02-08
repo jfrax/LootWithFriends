@@ -1,4 +1,5 @@
-﻿using UniLinq;
+﻿using System;
+using UniLinq;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -14,7 +15,7 @@ namespace LootWithFriends
                 return;
             }
             
-            if (ConnectionManager.Instance.IsServer)
+            if (ConnectionManager.Instance.IsServer && Utilities.LocalPlayerExists())
             {
                 var (toDrop, stacksToDrop) = ServerWhatShouldBeDropped(ItemDropRequestInfo.FromServerPlayer(requestorPlayer));
                 
@@ -97,23 +98,27 @@ namespace LootWithFriends
                          null
                      ))
             {
-                container.SetVelocity(Vector3.zero);
+                
+                var nearestPlayer = Utilities.FindNearestOtherPlayer(playerDropping);
+                Waypoints.LootContainerAdded(container, playerDropping, nearestPlayer);
+                
+                //container.SetVelocity(Vector3.zero);
                 
                 //On the server, we will always create waypoint for the local player.
-                LootWaypointManager.AddForLocalPlayer(container, playerDropping);
+                //LootWaypointManager.AddForLocalPlayer(container, playerDropping);
 
-                var nearestPlayer = Utilities.FindNearestOtherPlayer(playerDropping);
-                if (nearestPlayer != null)
-                {
-                    //also need to let the client know to create their own waypoint
-                    var pkg = NetPackageManager.GetPackage<NetPackageServerSendClientWaypoint>().Setup(container, playerDropping);
-
-                    ConnectionManager.Instance.SendPackage(
-                        pkg,
-                        _onlyClientsAttachedToAnEntity: true,
-                        _attachedToEntityId: nearestPlayer.entityId
-                    );
-                }
+                // var nearestPlayer = Utilities.FindNearestOtherPlayer(playerDropping);
+                // if (nearestPlayer != null)
+                // {
+                //     //also need to let the client know to create their own waypoint
+                //     var pkg = NetPackageManager.GetPackage<NetPackageServerSendClientWaypoint>().Setup(container, playerDropping);
+                //
+                //     ConnectionManager.Instance.SendPackage(
+                //         pkg,
+                //         _onlyClientsAttachedToAnEntity: true,
+                //         _attachedToEntityId: nearestPlayer.entityId
+                //     );
+                // }
             }
 
             return true;
@@ -126,7 +131,6 @@ namespace LootWithFriends
             {
                 if (itemsToDrop[i])
                 {
-                    Log.Out($"CLIENT IS DROPPING ITEM AT INDEX {i}");
                     localPlayer.bag.SetSlot(i, ItemStack.Empty.Clone());    
                 }
             }
