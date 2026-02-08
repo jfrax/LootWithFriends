@@ -76,6 +76,9 @@ namespace LootWithFriends
             if (player == null)
                 return;
 
+            if (!knownDroppedBags.Any(x => x.entityId == saveData.entityId))
+                knownDroppedBags.Add(saveData);
+            
             RegisterLootBagClasses();
 
             
@@ -106,7 +109,7 @@ namespace LootWithFriends
                         break;
                     }
 
-                    Log.Error("Trying to look up by coordinates!");
+                    Log.Warning("Trying to look up by coordinates!");
                     if (candidate.pos == Vector3i.FromVector3Rounded(new Vector3(saveData.posX, saveData.posY, saveData.posZ)))
                     {
                         wp = candidate;
@@ -117,37 +120,8 @@ namespace LootWithFriends
             
             if (beingDeleted)
             {
-                Log.Out("beingDeleted");
-                if (wp != null)
-                {
-                    Log.Out("The waypoint existed for us to delete");
-                    
-                    GameManager.Instance.myEntityPlayerLocal.RemoveNavObject(wp.navObject.name);
-
-                    var mo = GameManager.Instance.World.GetObjectOnMapList(EnumMapObjectType.Entity)
-                        .FirstOrDefault(x => x.key == wp.MapObjectKey);
-                    if (mo != null)
-                    {
-                        Log.Out("Removing MapObject");
-                        GameManager.Instance.World.ObjectOnMapRemove(EnumMapObjectType.Entity, mo.position);
-                    }
-                    
-                    if (wp.navObject != null)
-                    {
-                        Log.Out("Unregistering NavObject");
-                        NavObjectManager.Instance.UnRegisterNavObject(wp.navObject);
-                        NavObjectManager.Instance.RefreshNavObjects();
-                    }
-                    
-                    player.Waypoints.Collection.Remove(wp);
-                }
-                else
-                {
-                    Log.Error("The waypoint didn't exist for us to delete!!!");
-                }
-
+                FullyDeleteWaypoint(saveData, wp, player);
                 knownDroppedBags.Remove(saveData);
-
                 return;
             }
             
@@ -160,14 +134,17 @@ namespace LootWithFriends
             }
             else
             {
+                Log.Warning("Deleting Existing Waypoint - Should Remake in a sec");
                 //did exist - we'll leave its name alone as we noted before; delete and re-add
-                player.Waypoints.Collection.Remove(wp);
+                FullyDeleteWaypoint(saveData, wp, player);
             }
 
             if (asCoordinateReference || container == null || (container?.bRemoved ?? true))
             {
                 Log.Warning("About to make location-based wp");
-                var pos = new Vector3(saveData.posX, saveData.posY, saveData.posZ);
+                var pos = container == null 
+                    ? new Vector3(saveData.posX, saveData.posY, saveData.posZ)
+                    : new Vector3(container.position.x, container.position.y, container.position.z);
                 
                 //based on location (needed so it can still show on the map)
                 wp = new Waypoint
@@ -212,6 +189,38 @@ namespace LootWithFriends
 
             GameManager.Instance.World.ObjectOnMapAdd(mapObj);
             
+        }
+
+        private static void FullyDeleteWaypoint(KnownDroppedBagSaveData saveData, Waypoint wp, EntityPlayerLocal player)
+        {
+            Log.Out("beingDeleted");
+            if (wp != null)
+            {
+                Log.Out("The waypoint existed for us to delete");
+                    
+                GameManager.Instance.myEntityPlayerLocal.RemoveNavObject(wp.navObject.name);
+
+                var mo = GameManager.Instance.World.GetObjectOnMapList(EnumMapObjectType.Entity)
+                    .FirstOrDefault(x => x.key == wp.MapObjectKey);
+                if (mo != null)
+                {
+                    Log.Out("Removing MapObject");
+                    GameManager.Instance.World.ObjectOnMapRemove(EnumMapObjectType.Entity, mo.position);
+                }
+                    
+                if (wp.navObject != null)
+                {
+                    Log.Out("Unregistering NavObject");
+                    NavObjectManager.Instance.UnRegisterNavObject(wp.navObject);
+                    NavObjectManager.Instance.RefreshNavObjects();
+                }
+                    
+                player.Waypoints.Collection.Remove(wp);
+            }
+            else
+            {
+                Log.Error("The waypoint didn't exist for us to delete!!!");
+            }
         }
 
         public static void LootContainerRemoved(EntityLootContainer lootContainer)
@@ -360,6 +369,7 @@ namespace LootWithFriends
             var bagMatch = knownDroppedBags.FirstOrDefault(x => x.entityId == lootContainer.entityId);
             if (bagMatch != null)
             {
+                Log.Out("UpdateWaypointWithBagReference - bagMatch found! Proceeding to update as container waypoint");
                 AddUpdateOrDeleteWaypointForLocalPlayer(bagMatch, false, false);
             }
         }
@@ -369,6 +379,7 @@ namespace LootWithFriends
             var bagMatch = knownDroppedBags.FirstOrDefault(x => x.entityId == lootContainer.entityId);
             if (bagMatch != null)
             {
+                Log.Out("UpdateWaypointWithCoordinateReference - bagMatch found! Proceeding to update as coordinate waypoint");
                 AddUpdateOrDeleteWaypointForLocalPlayer(bagMatch, false, true);
             }
         }
