@@ -13,5 +13,8 @@ namespace LootWithFriends
         public string droppedByStableId;
         public string droppedForStableId;
         public string droppedByDisplayName;
+
+        public bool droppedByDeletedWaypoint;
+        public bool droppedForDeletedWaypoint;
     }
 }

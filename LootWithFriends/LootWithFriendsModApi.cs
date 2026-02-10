@@ -1,6 +1,7 @@
 ﻿using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
+using System.Reflection;
 
 namespace LootWithFriends
 {
@@ -33,7 +34,7 @@ namespace LootWithFriends
                 var playerThatSpawned = Utilities.FindNearestPlayer(data.Position);
                 if (playerThatSpawned != null)
                 {
-                    Waypoints.FetchPlayerWaypoints(playerThatSpawned);    
+                    Waypoints.ServerSyncWaypointsToPlayer(playerThatSpawned);
                 }
                 else
                 {
@@ -51,7 +52,9 @@ namespace LootWithFriends
                 if (!ConnectionManager.Instance.IsServer)
                     return;
                 
-                Waypoints.LootContainerRemoved(__instance);
+                Log.Out("EntityLootContainer_RemoveBackpack_Patch - EntityLootContainer removed from world!");
+                
+                Waypoints.ServerLootContainerRemoved(__instance);
             }
         }
         
@@ -64,7 +67,7 @@ namespace LootWithFriends
                 if (__instance is EntityLootContainer lootContainer)
                 {
                     Log.Out("Entity_OnAddedToWorld_Patch - EntityLootContainer added to world!");
-                    Waypoints.UpdateWaypointWithBagReference(lootContainer);
+                    Waypoints.OnLootContainerLoaded(lootContainer);
                 }
             }
         }
@@ -77,7 +80,7 @@ namespace LootWithFriends
                 if (__instance is EntityLootContainer container)
                 {
                     Log.Out("Entity_OnEntityUnload_Patch - EntityLootContainer unloaded!");
-                    Waypoints.UpdateWaypointWithCoordinateReference(container);
+                    Waypoints.OnLootContainerUnloaded(container);
                 }
             }
         }
@@ -140,12 +143,11 @@ namespace LootWithFriends
                 var btn = __instance.GetChildById("btnDropWithAffinities");
                 if (btn == null)
                 {
-                    Log.Out("[LootWithFriends] btnDropWithAffinities not found");
                     return;
                 }
 
                 btn.OnPress += OnDropWithAffinitiesPressed;
-                Log.Out("[LootWithFriends] Drop button wired");
+                
             }
 
             private static void OnDropWithAffinitiesPressed(XUiController sender, int mouseButton)
@@ -159,6 +161,22 @@ namespace LootWithFriends
                 ItemDrop.PerformDrop(player);
 
                 // LootWithFriendsDropper.DropUsingAffinities(player);
+            }
+        }
+
+        [HarmonyPatch(typeof(XUiC_MapWaypointList), nameof(XUiC_MapWaypointList.onWaypointRemovePressed))]
+        public static class MapWaypointList_onWaypointRemovePressed_Patch
+        {
+            static void Prefix(XUiC_MapWaypointList __instance, XUiController _sender, int _mouseButton)
+            {
+                //mirroring base logic to ensure we only fire our logic if the base method is about to actually delete the waypoint
+                EntityPlayerLocal entityPlayer = __instance.xui.playerUI.entityPlayer;
+                Waypoint selectedWaypoint = __instance.GetSelectedWaypoint();
+                if (selectedWaypoint != null &&
+                    (selectedWaypoint.lastKnownPositionEntityId == -1 || selectedWaypoint.bIsAutoWaypoint))
+                {
+                    Waypoints.RemoveSaveDataFromWaypoint(selectedWaypoint, entityPlayer.entityId);
+                }
             }
         }
 

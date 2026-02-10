@@ -6,7 +6,7 @@
                 name="btnDropWithAffinities"
                 depth="3"
                 sprite="ui_game_symbol_drop"
-                tooltip="LWF: Drop items for nearby friend"
+                tooltip_key="lwf.dropbutton.tooltip"
                 pos="-80, -22"
                 style="icon32px, press, hover"
                 pivot="center"

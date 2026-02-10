@@ -8,455 +8,541 @@ using UnityEngine;
 
 namespace LootWithFriends
 {
-    public class Waypoints
+    public static class Waypoints
     {
         private static List<KnownDroppedBagSaveData> knownDroppedBags = new List<KnownDroppedBagSaveData>();
 
         private static string LootWaypointsFile =>
             Path.Combine(Utilities.ModSaveDir, "lootwaypoints.json");
 
-        public static void LootContainerAdded(EntityLootContainer lootContainer, EntityPlayer droppedBy,
+        /* ==========================================================
+         *  SERVER ENTRY POINTS
+         * ========================================================== */
+
+        public static void ServerLootContainerAdded(
+            EntityLootContainer container,
+            EntityPlayer droppedBy,
             EntityPlayer droppedFor)
         {
-            NetGuards.ServerOnly("LootContainerAdded");
-            var saveData = new KnownDroppedBagSaveData
-            {
-                entityId = lootContainer.entityId,
-                posX = lootContainer.position.x,
-                posY = lootContainer.position.y,
-                posZ = lootContainer.position.z,
-                droppedByStableId = Utilities.GetStablePlayerId(droppedBy),
-                droppedForStableId = Utilities.GetStablePlayerId(droppedFor),
-                droppedByDisplayName = droppedBy.PlayerDisplayName
-            };
+            NetGuards.ServerOnly(nameof(ServerLootContainerAdded));
 
-            //update server collection
+            var saveData = CreateSaveData(container, droppedBy, droppedFor);
             knownDroppedBags.Add(saveData);
 
-            //update clients
-            var pkg = NetPackageManager.GetPackage<NetPackageServerSendClientKnownDroppedBagSaveData>().Setup(saveData);
+            SendBagUpdateToPlayers(saveData, isDelete: false);
+            UpdateLocalPlayerWaypoint(saveData, forceCoordinates: false);
+        }
 
-            var serverPlayerId = GameManager.Instance.myEntityPlayerLocal?.entityId ?? -1;
-            var droppedForNonServerPlayer = droppedFor != null && droppedFor.entityId != serverPlayerId;
-            var droppedByNonServerPlayer = droppedBy != null && droppedBy.entityId != serverPlayerId;
+        public static void ServerLootContainerRemoved(EntityLootContainer container)
+        {
+            NetGuards.ServerOnly(nameof(ServerLootContainerRemoved));
+
+            var saveData = knownDroppedBags
+                .FirstOrDefault(x => x.entityId == container.entityId);
+
+            if (saveData == null)
+                return;
+
+            knownDroppedBags.Remove(saveData);
+
+            SendBagUpdateToPlayers(saveData, isDelete: true);
+            DeleteLocalWaypoint(saveData);
+        }
+   
+        public static void ServerSyncWaypointsToPlayer(EntityPlayer player)
+        {
+            NetGuards.ServerOnly(nameof(ServerSyncWaypointsToPlayer));
+
+            if (knownDroppedBags == null || knownDroppedBags.Count == 0)
+                return;
             
-            if (droppedForNonServerPlayer)
+            if (Utilities.LocalPlayerExists() && player.entityId == GameManager.Instance.myEntityPlayerLocal.entityId)
             {
-                ConnectionManager.Instance.SendPackage(
-                    pkg,
-                    _onlyClientsAttachedToAnEntity: true,
-                    _attachedToEntityId: droppedFor.entityId
-                );
+                var myStableId = Utilities.GetStablePlayerId(player);
+                //we are the host player. load up our waypoints here
+                if (knownDroppedBags.Any())
+                {
+                    foreach (var saveData in knownDroppedBags.Where(x => 
+                                 x.droppedForStableId == myStableId
+                                 || x.droppedForStableId == myStableId)) 
+                    {
+                        ClientApplyBagState(saveData);
+                    }    
+                }
             }
-
-            if (droppedByNonServerPlayer)
+            else
             {
-                ConnectionManager.Instance.SendPackage(
-                    pkg,
-                    _onlyClientsAttachedToAnEntity: true,
-                    _attachedToEntityId: droppedBy.entityId
-                );
+                //a connecting client needs to know their waypoints, so send the netpkg
+                foreach (var bag in knownDroppedBags)
+                {
+                    var pkg = NetPackageManager
+                        .GetPackage<NetPackageServerSendClientKnownDroppedBagSaveData>()
+                        .Setup(bag, beingDeleted: false);
+
+                    ConnectionManager.Instance.SendPackage(
+                        pkg,
+                        _onlyClientsAttachedToAnEntity: true,
+                        _attachedToEntityId: player.entityId);
+                }
             }
+            
+            
+        }
 
-            //TODO: need to add this check everywhere in case local server player doesn't exist
-            //update server player
-            if (Utilities.LocalPlayerExists())
+
+        /* ==========================================================
+         *  LOCAL PLAYER WAYPOINT HANDLING
+         * ========================================================== */
+
+        public static void ClientApplyBagState(KnownDroppedBagSaveData saveData)
+        {
+            // ensure we track this bag locally
+            if (!knownDroppedBags.Any(x => x.entityId == saveData.entityId))
+                knownDroppedBags.Add(saveData);
+
+            // try to render it in the best possible way
+            UpdateLocalPlayerWaypoint(
+                saveData,
+                forceCoordinates: false);
+        }
+
+        
+        public static void OnLootContainerLoaded(EntityLootContainer container)
+        {
+            var bag = knownDroppedBags
+                .FirstOrDefault(x => x.entityId == container.entityId);
+
+            if (bag != null)
             {
-                //not positive about this, but i think the server player should always have a reference to the bag at this point
-                //we will assume so and optimistically create the waypoint as a container reference type (it falls back to coordinate-based anyway)
-                AddUpdateOrDeleteWaypointForLocalPlayer(saveData, false, false);
+                UpdateLocalPlayerWaypoint(bag, forceCoordinates: false);
             }
         }
 
-        public static void AddUpdateOrDeleteWaypointForLocalPlayer(KnownDroppedBagSaveData saveData, bool beingDeleted, bool asCoordinateReference)
+        public static void OnLootContainerUnloaded(EntityLootContainer container)
         {
-            Log.Warning(StackTraceUtility.ExtractStackTrace());
-            
+            var bag = knownDroppedBags
+                .FirstOrDefault(x => x.entityId == container.entityId);
+
+            if (bag != null)
+            {
+                UpdateLocalPlayerWaypoint(bag, forceCoordinates: true);
+            }
+        }
+        
+        private static void UpdateLocalPlayerWaypoint(
+            KnownDroppedBagSaveData saveData,
+            bool forceCoordinates)
+        {
             var player = GameManager.Instance.myEntityPlayerLocal;
             if (player == null)
                 return;
 
-            if (!knownDroppedBags.Any(x => x.entityId == saveData.entityId))
-                knownDroppedBags.Add(saveData);
-            
             RegisterLootBagClasses();
 
-            
-            var container = GameManager.Instance.World.GetEntity(saveData.entityId) as EntityLootContainer;
-            if (container != null)
-            {
-                //container coordinates are better if available - let's ensure our savedata is up to date
-                saveData.posX = container.position.x;
-                saveData.posY = container.position.y;
-                saveData.posZ = container.position.z;
-            }
-                
-            
-            var iDroppedIt = saveData.droppedByStableId == Utilities.GetStablePlayerId(player);
-           
-            
-            //first, check if we have a waypoint either with the entity attached or at the position of the saveData
-            Waypoint wp = null;
+            ResolveContainerPosition(saveData, out var container);
 
-            if (player.Waypoints?.Collection?.hashSet != null)
-            {
-                foreach (var candidate in player.Waypoints.Collection.hashSet)
-                {
-                    var trackedEntityId = candidate.navObject?.trackedEntity?.entityId;
-                    if (trackedEntityId != null && trackedEntityId == saveData.entityId)
-                    {
-                        wp = candidate;
-                        break;
-                    }
+            var existing = FindExistingWaypoint(player, saveData);
+            var waypointName = GetWaypointName(player, saveData, existing);
 
-                    Log.Warning("Trying to look up by coordinates!");
-                    if (candidate.pos == Vector3i.FromVector3Rounded(new Vector3(saveData.posX, saveData.posY, saveData.posZ)))
-                    {
-                        wp = candidate;
-                        break;
-                    }
-                }
-            }
+            if (existing != null)
+                FullyDeleteWaypoint(existing, player);
+
+            CreateWaypoint(
+                player,
+                saveData,
+                waypointName,
+                container,
+                forceCoordinates);
+        }
+
+        public static void DeleteLocalWaypoint(KnownDroppedBagSaveData saveData)
+        {
+            var player = GameManager.Instance.myEntityPlayerLocal;
+            if (player == null)
+                return;
+
+            var wp = FindExistingWaypoint(player, saveData);
+            if (wp != null)
+                FullyDeleteWaypoint(wp, player);
             
-            if (beingDeleted)
+            var match = knownDroppedBags.FirstOrDefault(x => x.entityId == saveData.entityId);
+            if (match != null)
+                knownDroppedBags.Remove(match);
+            
+        }
+
+        /* ==========================================================
+         *  WAYPOINT CREATION
+         * ========================================================== */
+
+        private static void CreateWaypoint(
+            EntityPlayerLocal player,
+            KnownDroppedBagSaveData saveData,
+            string name,
+            EntityLootContainer container,
+            bool forceCoordinates)
+        {
+            bool iDroppedIt =
+                saveData.droppedByStableId == Utilities.GetStablePlayerId(player);
+
+            if (iDroppedIt && saveData.droppedByDeletedWaypoint)
+                return; //we already deleted it locally. don't recreate
+            
+            if (!iDroppedIt && saveData.droppedForDeletedWaypoint)
+                return; //we already deleted it locally. don't recreate
+            
+            if (iDroppedIt && !UserPreferences.CreateWaypointsForBagsIDrop)
             {
-                FullyDeleteWaypoint(saveData, wp, player);
-                knownDroppedBags.Remove(saveData);
+                MarkWaypointAsDeleted(saveData, saveData.droppedForStableId);
                 return;
             }
+
+            if (!iDroppedIt && !UserPreferences.CreateWaypointsForBagsFriendsDrop)
+            {
+                MarkWaypointAsDeleted(saveData, saveData.droppedForStableId);
+                return;
+            }
+             
+            Log.Warning("Creating Waypoint!");
             
-            //if the waypoint already existed, we want to note its name, then recreate it
-            var waypointName = GetWaypointInitialName(saveData, iDroppedIt, wp);
-            if (wp == null)
-            {
-                //didn't exist - let's ensure we have a good unique name
-                waypointName = MakeUniqueWaypointName(waypointName, player);
-            }
-            else
-            {
-                Log.Warning("Deleting Existing Waypoint - Should Remake in a sec");
-                //did exist - we'll leave its name alone as we noted before; delete and re-add
-                FullyDeleteWaypoint(saveData, wp, player);
-            }
+            bool useCoordinates =
+                forceCoordinates || container == null || container.bRemoved;
 
-            if (asCoordinateReference || container == null || (container?.bRemoved ?? true))
-            {
-                Log.Warning("About to make location-based wp");
-                var pos = container == null 
-                    ? new Vector3(saveData.posX, saveData.posY, saveData.posZ)
-                    : new Vector3(container.position.x, container.position.y, container.position.z);
-                
-                //based on location (needed so it can still show on the map)
-                wp = new Waypoint
-                {
-                    pos = Vector3i.FromVector3Rounded(pos),
-                    icon = "ui_game_symbol_drop",
-                    name = new AuthoredText() { Text = waypointName },
-                    bTracked = true,
-                    navObject = NavObjectManager.Instance.RegisterNavObject(
-                        iDroppedIt ? "backpack_self" : "backpack_friend",
-                        pos
-                    ),
-                    bIsAutoWaypoint = false,
-                    IsSaved = false
-                };
-            }
-            else
-            {
-                //based on reference to the actual container (it's loaded into the chunk on our world)
-                Log.Warning("About to make container-based wp");
-                wp = new Waypoint
-                {
-                    pos = Vector3i.FromVector3Rounded(container.position),
-                    icon = "ui_game_symbol_drop",
-                    name = new AuthoredText() { Text = waypointName },
-                    bTracked = true,
-                    navObject = NavObjectManager.Instance.RegisterNavObject(
-                        iDroppedIt ? "backpack_self" : "backpack_friend",
-                        container
-                    ),
-                    bIsAutoWaypoint = false,
-                    IsSaved = false
-                }; 
-            }
+            Vector3 pos = useCoordinates
+                ? new Vector3(saveData.posX, saveData.posY, saveData.posZ)
+                : container.position;
 
-            player.Waypoints.Collection.Add(wp);
-            var mapObj = new MapObjectWaypoint(wp)
+            var navObject = useCoordinates
+                ? NavObjectManager.Instance.RegisterNavObject(
+                    iDroppedIt ? "backpack_self" : "backpack_friend",
+                    pos)
+                : NavObjectManager.Instance.RegisterNavObject(
+                    iDroppedIt ? "backpack_self" : "backpack_friend",
+                    container);
+
+            var wp = new Waypoint
             {
-                iconName = iDroppedIt ? "ui_game_symbol_drop" : "ui_game_symbol_challenge_homesteading_place_storage",
-                type = EnumMapObjectType.Entity
+                pos = Vector3i.FromVector3Rounded(pos),
+                icon = "ui_game_symbol_drop",
+                name = new AuthoredText { Text = name },
+                bTracked = true,
+                navObject = navObject,
+                bIsAutoWaypoint = false,
+                IsSaved = false
             };
 
-            GameManager.Instance.World.ObjectOnMapAdd(mapObj);
-            
-        }
+            player.Waypoints.Collection.Add(wp);
 
-        private static void FullyDeleteWaypoint(KnownDroppedBagSaveData saveData, Waypoint wp, EntityPlayerLocal player)
-        {
-            Log.Out("beingDeleted");
-            if (wp != null)
-            {
-                Log.Out("The waypoint existed for us to delete");
-                    
-                GameManager.Instance.myEntityPlayerLocal.RemoveNavObject(wp.navObject.name);
-
-                var mo = GameManager.Instance.World.GetObjectOnMapList(EnumMapObjectType.Entity)
-                    .FirstOrDefault(x => x.key == wp.MapObjectKey);
-                if (mo != null)
+            GameManager.Instance.World.ObjectOnMapAdd(
+                new MapObjectWaypoint(wp)
                 {
-                    Log.Out("Removing MapObject");
-                    GameManager.Instance.World.ObjectOnMapRemove(EnumMapObjectType.Entity, mo.position);
-                }
-                    
-                if (wp.navObject != null)
-                {
-                    Log.Out("Unregistering NavObject");
-                    NavObjectManager.Instance.UnRegisterNavObject(wp.navObject);
-                    NavObjectManager.Instance.RefreshNavObjects();
-                }
-                    
-                player.Waypoints.Collection.Remove(wp);
-            }
-            else
-            {
-                Log.Error("The waypoint didn't exist for us to delete!!!");
-            }
+                    iconName = iDroppedIt
+                        ? "ui_game_symbol_drop"
+                        : "ui_game_symbol_challenge_homesteading_place_storage",
+                    type = EnumMapObjectType.Entity
+                });
         }
 
-        public static void LootContainerRemoved(EntityLootContainer lootContainer)
+        /* ==========================================================
+         *  WAYPOINT UTILITIES
+         * ========================================================== */
+
+        private static Waypoint FindExistingWaypoint(
+            EntityPlayerLocal player,
+            KnownDroppedBagSaveData saveData)
         {
-            NetGuards.ServerOnly("LootContainerRemoved");
-            Log.Out("LootContainerRemoved called");
-            var toRemove = knownDroppedBags.FirstOrDefault(x => x.entityId == lootContainer.entityId);
-            if (toRemove == null)
-                return; //probably a container not created by our mod
-
-            Log.Out("LootContainerRemoved - toRemove was not null!");
-
-            var droppedBy = Utilities.FindPlayerByStableId(toRemove.droppedByStableId);
-            var droppedFor = Utilities.FindPlayerByStableId(toRemove.droppedForStableId);
-            
-            if (droppedBy != null && droppedBy != GameManager.Instance.myEntityPlayerLocal)
-            {
-                Log.Out("Sending pkg to droppedBy player");
-                var pkg = NetPackageManager.GetPackage<NetPackageServerSendClientKnownDroppedBagSaveData>().Setup(toRemove, true);
-                ConnectionManager.Instance.SendPackage(
-                    pkg,
-                    _onlyClientsAttachedToAnEntity: true,
-                    _attachedToEntityId: droppedBy.entityId
-                );
-            }
-            
-            if (droppedFor != null && droppedFor != GameManager.Instance.myEntityPlayerLocal)
-            {
-                Log.Out("Sending pkg to droppedFor player");
-                var pkg = NetPackageManager.GetPackage<NetPackageServerSendClientKnownDroppedBagSaveData>().Setup(toRemove, true);
-                ConnectionManager.Instance.SendPackage(
-                    pkg,
-                    _onlyClientsAttachedToAnEntity: true,
-                    _attachedToEntityId: droppedFor.entityId
-                );
-            }
-            
-            AddUpdateOrDeleteWaypointForLocalPlayer(toRemove,true, false);
+            return player.Waypoints?.Collection?.hashSet?
+                .FirstOrDefault(wp =>
+                    wp.navObject?.trackedEntity?.entityId == saveData.entityId ||
+                    wp.pos == Vector3i.FromVector3Rounded(
+                        new Vector3(saveData.posX, saveData.posY, saveData.posZ)));
         }
 
-        private static string GetWaypointInitialName(KnownDroppedBagSaveData saveData, bool iDroppedIt,
-            Waypoint existingWaypoint)
+        private static string GetWaypointName(
+            EntityPlayer player,
+            KnownDroppedBagSaveData saveData,
+            Waypoint existing)
         {
-            if (existingWaypoint != null)
-                return existingWaypoint.name.Text;
+            if (existing != null)
+                return existing.name.Text;
 
-            return iDroppedIt
+            var baseName = saveData.droppedByStableId ==
+                           Utilities.GetStablePlayerId(player)
                 ? Localization.Get("lwf.waypoint.loot_drop.self")
                 : string.Format(
                     Localization.Get("lwf.waypoint.loot_drop.other"),
                     saveData.droppedByDisplayName);
+
+            return MakeUniqueWaypointName(baseName, player);
         }
 
-
-        private static string MakeUniqueWaypointName(string baseName, EntityPlayer player)
+        private static void FullyDeleteWaypoint(
+            Waypoint wp,
+            EntityPlayerLocal player)
         {
-            var existing = player.Waypoints.Collection.hashSet
-                .Select(x => x.name.Text)
-                .Where(n => n == baseName || n.StartsWith(baseName + " ("))
+            player.RemoveNavObject(wp.navObject?.name);
+
+            var mapObj = GameManager.Instance.World
+                .GetObjectOnMapList(EnumMapObjectType.Entity)
+                .FirstOrDefault(x => x.key == wp.MapObjectKey);
+
+            if (mapObj != null)
+                GameManager.Instance.World.ObjectOnMapRemove(
+                    EnumMapObjectType.Entity,
+                    mapObj.position);
+
+            if (wp.navObject != null)
+                NavObjectManager.Instance.UnRegisterNavObject(wp.navObject);
+
+            player.Waypoints.Collection.Remove(wp);
+            NavObjectManager.Instance.RefreshNavObjects();
+        }
+        
+        private static string MakeUniqueWaypointName(
+            string baseName,
+            EntityPlayer player)
+        {
+            var existingNames = player.Waypoints?.Collection?.hashSet?
+                .Select(wp => wp.name.Text)
+                .Where(n =>
+                    n == baseName ||
+                    n.StartsWith(baseName + " ("))
                 .ToList();
 
-            if (!existing.Contains(baseName))
+            if (existingNames == null || !existingNames.Contains(baseName))
                 return baseName;
 
-            int i = 2;
+            int suffix = 2;
             string candidate;
+
             do
             {
-                candidate = $"{baseName} ({i})";
-                i++;
-            } while (existing.Contains(candidate));
+                candidate = $"{baseName} ({suffix++})";
+            }
+            while (existingNames.Contains(candidate));
 
             return candidate;
         }
+        
+        public static void RemoveSaveDataFromWaypoint(Waypoint selectedWaypoint, int deletingPlayerEntityId)
+        {
+            if (!knownDroppedBags?.Any() ?? true)
+                return;
+            
+            var deleterStableId = Utilities.GetStablePlayerId(deletingPlayerEntityId);
+            for (int i = 0; i < knownDroppedBags.Count; i++)
+            {
+                var sd = knownDroppedBags[i];
+                if (sd.entityId == selectedWaypoint.navObject?.trackedEntity?.entityId
+                    || Vector3i.FromVector3Rounded(new Vector3(sd.posX, sd.posY, sd.posZ)) == selectedWaypoint.pos)
+                {
+                    // the waypoint being removed is one created by our mod - proceed to mark is as deleted for this player so it doesn't reappear
+                    MarkWaypointAsDeleted(sd, deleterStableId);
+                    return;
+                }
+            }
+            
+        }
 
+
+        /* ==========================================================
+         *  NETWORKING
+         * ========================================================== */
+
+        private static void SendBagUpdateToPlayers(
+            KnownDroppedBagSaveData saveData,
+            bool isDelete)
+        {
+            void Send(EntityPlayer player)
+            {
+                if (player == null ||
+                    player == GameManager.Instance.myEntityPlayerLocal)
+                    return;
+
+                var pkg = NetPackageManager
+                    .GetPackage<NetPackageServerSendClientKnownDroppedBagSaveData>()
+                    .Setup(saveData, isDelete);
+
+                ConnectionManager.Instance.SendPackage(
+                    pkg,
+                    true,
+                    player.entityId);
+            }
+
+            Send(Utilities.FindPlayerByStableId(saveData.droppedByStableId));
+            Send(Utilities.FindPlayerByStableId(saveData.droppedForStableId));
+        }
+
+        /* ==========================================================
+         *  HELPERS
+         * ========================================================== */
+
+        private static KnownDroppedBagSaveData CreateSaveData(
+            EntityLootContainer container,
+            EntityPlayer droppedBy,
+            EntityPlayer droppedFor)
+        {
+            return new KnownDroppedBagSaveData
+            {
+                entityId = container.entityId,
+                posX = container.position.x,
+                posY = container.position.y,
+                posZ = container.position.z,
+                droppedByStableId = Utilities.GetStablePlayerId(droppedBy),
+                droppedForStableId = Utilities.GetStablePlayerId(droppedFor),
+                droppedByDisplayName = droppedBy.PlayerDisplayName
+            };
+        }
+
+        private static void ResolveContainerPosition(
+            KnownDroppedBagSaveData saveData,
+            out EntityLootContainer container)
+        {
+            container = GameManager.Instance.World
+                .GetEntity(saveData.entityId) as EntityLootContainer;
+
+            if (container != null)
+            {
+                saveData.posX = container.position.x;
+                saveData.posY = container.position.y;
+                saveData.posZ = container.position.z;
+            }
+        }
+        
         private static void RegisterLootBagClasses()
         {
-            if (NavObjectClass.NavObjectClassList.Any(x => x.NavObjectClassName == "backpack_self"))
+            if (NavObjectClass.NavObjectClassList
+                .Any(x => x.NavObjectClassName == "backpack_self"))
                 return;
 
-            // Self backpack
-            var selfXml = new XElement("nav_object_class",
+            RegisterSelfBackpackClass();
+            RegisterFriendBackpackClass();
+        }
+        
+        private static void RegisterSelfBackpackClass()
+        {
+            var xml = new XElement("nav_object_class",
                 new XAttribute("name", "backpack_self"),
                 new XElement("onscreen_settings",
-                    new XElement("property", new XAttribute("name", "sprite_name"),
-                        new XAttribute("value", "ui_game_symbol_drop")),
-                    new XElement("property", new XAttribute("name", "color"),
-                        new XAttribute("value", "0,50,199,50")),
-                    new XElement("property", new XAttribute("name", "has_pulse"),
-                        new XAttribute("value", "false")),
-                    new XElement("property", new XAttribute("name", "text_type"),
-                        new XAttribute("value", "Distance")),
-                    new XElement("property", new XAttribute("name", "offset"),
-                        new XAttribute("value", "0,0.4,0"))
+                    Prop("sprite_name", "ui_game_symbol_drop"),
+                    Prop("color", "0,50,199,50"),
+                    Prop("has_pulse", "false"),
+                    Prop("text_type", "Distance"),
+                    Prop("offset", "0,0.4,0")
                 ),
                 new XElement("map_settings",
-                    new XElement("property", new XAttribute("name", "sprite_name"),
-                        new XAttribute("value", "ui_game_symbol_drop")),
-                    new XElement("property", new XAttribute("name", "min_distance"),
-                        new XAttribute("value", "0")),
-                    new XElement("property", new XAttribute("name", "max_distance"),
-                        new XAttribute("value", "-1")),
-                    new XElement("property", new XAttribute("name", "color"),
-                        new XAttribute("value", "0,50,199,255")),
-                    new XElement("property", new XAttribute("name", "has_pulse"),
-                        new XAttribute("value", "false"))
+                    Prop("sprite_name", "ui_game_symbol_drop"),
+                    Prop("min_distance", "0"),
+                    Prop("max_distance", "-1"),
+                    Prop("color", "0,50,199,255"),
+                    Prop("has_pulse", "false")
                 )
             );
 
-            NavObjectClassesFromXml.ParseNavObjectClass(selfXml);
-
-            // Friend backpack
-            var friendXml = new XElement("nav_object_class",
+            NavObjectClassesFromXml.ParseNavObjectClass(xml);
+        }
+        
+        private static void RegisterFriendBackpackClass()
+        {
+            var xml = new XElement("nav_object_class",
                 new XAttribute("name", "backpack_friend"),
                 new XElement("onscreen_settings",
-                    new XElement("property", new XAttribute("name", "sprite_name"),
-                        new XAttribute("value", "ui_game_symbol_challenge_homesteading_place_storage")),
-                    new XElement("property", new XAttribute("name", "color"),
-                        new XAttribute("value", "0,255,255,255")),
-                    new XElement("property", new XAttribute("name", "has_pulse"),
-                        new XAttribute("value", "true")),
-                    new XElement("property", new XAttribute("name", "text_type"),
-                        new XAttribute("value", "Distance")),
-                    new XElement("property", new XAttribute("name", "offset"),
-                        new XAttribute("value", "0,0.4,0"))
+                    Prop("sprite_name",
+                        "ui_game_symbol_challenge_homesteading_place_storage"),
+                    Prop("color", "0,255,255,255"),
+                    Prop("has_pulse", "true"),
+                    Prop("text_type", "Distance"),
+                    Prop("offset", "0,0.4,0")
                 ),
                 new XElement("map_settings",
-                    new XElement("property", new XAttribute("name", "sprite_name"),
-                        new XAttribute("value", "ui_game_symbol_challenge_homesteading_place_storage")),
-                    new XElement("property", new XAttribute("name", "min_distance"),
-                        new XAttribute("value", "0")),
-                    new XElement("property", new XAttribute("name", "max_distance"),
-                        new XAttribute("value", "-1")),
-                    new XElement("property", new XAttribute("name", "color"),
-                        new XAttribute("value", "0,255,255,255")),
-                    new XElement("property", new XAttribute("name", "has_pulse"),
-                        new XAttribute("value", "true"))
+                    Prop("sprite_name",
+                        "ui_game_symbol_challenge_homesteading_place_storage"),
+                    Prop("min_distance", "0"),
+                    Prop("max_distance", "-1"),
+                    Prop("color", "0,255,255,255"),
+                    Prop("has_pulse", "true")
                 )
             );
 
-            NavObjectClassesFromXml.ParseNavObjectClass(friendXml);
+            NavObjectClassesFromXml.ParseNavObjectClass(xml);
         }
-
-        public static void UpdateWaypointWithBagReference(EntityLootContainer lootContainer)
+        
+        private static XElement Prop(string name, string value)
         {
-            var bagMatch = knownDroppedBags.FirstOrDefault(x => x.entityId == lootContainer.entityId);
-            if (bagMatch != null)
-            {
-                Log.Out("UpdateWaypointWithBagReference - bagMatch found! Proceeding to update as container waypoint");
-                AddUpdateOrDeleteWaypointForLocalPlayer(bagMatch, false, false);
-            }
+            return new XElement(
+                "property",
+                new XAttribute("name", name),
+                new XAttribute("value", value));
         }
-
-        public static void UpdateWaypointWithCoordinateReference(EntityLootContainer lootContainer)
-        {
-            var bagMatch = knownDroppedBags.FirstOrDefault(x => x.entityId == lootContainer.entityId);
-            if (bagMatch != null)
-            {
-                Log.Out("UpdateWaypointWithCoordinateReference - bagMatch found! Proceeding to update as coordinate waypoint");
-                AddUpdateOrDeleteWaypointForLocalPlayer(bagMatch, false, true);
-            }
-        }
-
+        
+        /* ==========================================================
+         *  PERSISTENCE
+         * ========================================================== */
         public static void LoadWaypoints()
         {
-            NetGuards.ServerOnly("LoadWaypoints");
+            NetGuards.ServerOnly(nameof(LoadWaypoints));
+
             if (!Directory.Exists(Utilities.ModSaveDir))
                 Directory.CreateDirectory(Utilities.ModSaveDir);
 
-            if (File.Exists(LootWaypointsFile))
-            {
-                string json = File.ReadAllText(LootWaypointsFile);
-                knownDroppedBags = JsonConvert.DeserializeObject<List<KnownDroppedBagSaveData>>(json) ??
-                                   new List<KnownDroppedBagSaveData>();
-            }
-            else
+            if (!File.Exists(LootWaypointsFile))
             {
                 knownDroppedBags = new List<KnownDroppedBagSaveData>();
+                return;
             }
-        }
 
+            var json = File.ReadAllText(LootWaypointsFile);
+            knownDroppedBags =
+                JsonConvert.DeserializeObject<List<KnownDroppedBagSaveData>>(json)
+                ?? new List<KnownDroppedBagSaveData>();
+        }
+        
         public static void SaveWaypoints()
         {
-            NetGuards.ServerOnly("SaveWaypoints");
+            NetGuards.ServerOnly(nameof(SaveWaypoints));
+
             if (!Directory.Exists(Utilities.ModSaveDir))
                 Directory.CreateDirectory(Utilities.ModSaveDir);
 
-            Log.Out($"Saving waypoints to {LootWaypointsFile}");
-            File.WriteAllText(LootWaypointsFile, JsonConvert.SerializeObject(knownDroppedBags, Formatting.Indented));
+            File.WriteAllText(
+                LootWaypointsFile,
+                JsonConvert.SerializeObject(
+                    knownDroppedBags,
+                    Formatting.Indented));
+        }
+        
+        public static void MarkWaypointAsDeleted(KnownDroppedBagSaveData sd, string deleterStableId)
+        {
+            if (ConnectionManager.Instance.IsServer)
+            {
+                //if both players don't care anymore, delete it. otherwise, we need to leave it around
+                if (sd.droppedByStableId == deleterStableId)
+                    sd.droppedByDeletedWaypoint = true;
+
+                if (sd.droppedForStableId == deleterStableId)
+                    sd.droppedForDeletedWaypoint = true;
+
+                if (sd.droppedByDeletedWaypoint &&
+                    (string.IsNullOrEmpty(sd.droppedForStableId)
+                     || sd.droppedForDeletedWaypoint))
+                {
+                    SendBagUpdateToPlayers(sd, true);
+                    knownDroppedBags.Remove(sd);
+                }
+            }
+            else //let server know
+            {
+                var deleter = Utilities.FindPlayerByStableId(deleterStableId);
+                var pkg = NetPackageManager
+                    .GetPackage<NetPackageClientOnTrackedWaypointRemoved>()
+                    .Setup(sd,deleter);
+
+                ConnectionManager.Instance.SendToServer(pkg);
+            }
         }
 
-        public static void FetchPlayerWaypoints(EntityPlayer entityPlayer)
-        {
-            NetGuards.ServerOnly("FetchPlayerWaypoints");
-            if (entityPlayer == GameManager.Instance.myEntityPlayerLocal)
-            {
-                //host player can just directly load up from here
-                if (knownDroppedBags?.Any() ?? false)
-                {
-                    foreach (var bag in knownDroppedBags)
-                    {
-                        AddUpdateOrDeleteWaypointForLocalPlayer(bag, false, false);
-                    }
-                }
-            }
-            else
-            {
-                //all other clients will need to be sent their waypoints
-                if (knownDroppedBags?.Any() ?? false)
-                {
-                    foreach (var saveData in knownDroppedBags)
-                    {
-                        var droppedBy = Utilities.FindPlayerByStableId(saveData.droppedByStableId);
-                        var droppedFor = Utilities.FindPlayerByStableId(saveData.droppedForStableId);
-                        
-                        //dropped by should always be present.
-                        var pkg = NetPackageManager.GetPackage<NetPackageServerSendClientKnownDroppedBagSaveData>().Setup(saveData);
-                        ConnectionManager.Instance.SendPackage(
-                            pkg,
-                            _onlyClientsAttachedToAnEntity: true,
-                            _attachedToEntityId: droppedBy.entityId
-                        );
-                       
-                        //droppedfor is optional, and we might need to send to that person too if they are different
-                        if (droppedFor != null && droppedFor != droppedBy)
-                        {
-                            var pkg2 = NetPackageManager.GetPackage<NetPackageServerSendClientKnownDroppedBagSaveData>().Setup(saveData);
-                            ConnectionManager.Instance.SendPackage(
-                                pkg2,
-                                _onlyClientsAttachedToAnEntity: true,
-                                _attachedToEntityId: droppedFor.entityId
-                            );
-                        }
-                    }
-                }
-            }
-        }
+        
+
+        
     }
 }

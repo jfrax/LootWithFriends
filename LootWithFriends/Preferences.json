@@ -1,0 +1,5 @@
+﻿{
+  "CreateWaypointsForBagsIDrop" : true,
+  "CreateWaypointsForBagsFriendsDrop" : true,
+  "AllowDropWhenNoAlliesPresent" :  true
+}

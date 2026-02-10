@@ -68,6 +68,10 @@
     <Content Include="Config\Localization.txt">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <None Remove="Preferences.json" />
+    <Content Include="Preferences.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
 
     <!-- Nav object configs -->
   </ItemGroup>
@@ -85,6 +89,7 @@
                 Condition="Exists('$(TargetDir)$(TargetName).pdb')" />
       
       <ModFiles Include="$(TargetDir)ModInfo.xml" />
+      <ModFiles Include="$(TargetDir)Preferences.json" />
       
       <ConfigFiles Include="$(TargetDir)Config\**\*.*" />
 

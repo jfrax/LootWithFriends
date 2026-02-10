@@ -9,6 +9,9 @@ namespace LootWithFriends
         public static string ModSaveDir =>
             Path.Combine(ConnectionManager.Instance.IsServer ? GameIO.GetSaveGameDir() : GameIO.GetSaveGameLocalDir(),
                 "Mods", "LootWithFriends");
+        
+        public static string ModInstallDir =>
+            Path.Combine(GameIO.GetGameDir(string.Empty), "Mods", "LootWithFriends");
 
         public static string GetStablePlayerId(EntityPlayer player)
         {
@@ -21,6 +24,18 @@ namespace LootWithFriends
                 .GetPlayerDataFromEntityID(player.entityId);
 
             return ppd?.PlatformData.PrimaryId.CombinedString;
+        }
+
+        public static string GetStablePlayerId(int playerEntityId)
+        {
+            for (int i = 0; i < GameManager.Instance.World.Players.list.Count; i++)
+            {
+                if (GameManager.Instance.World.Players.list[i].entityId == playerEntityId)
+                {
+                    return GetStablePlayerId(GameManager.Instance.World.Players.list[i]);
+                }
+            }
+            return null;
         }
 
         public static EntityPlayer FindPlayerByStableId(string stableId)
@@ -40,19 +55,27 @@ namespace LootWithFriends
         }
 
 
-        public static EntityPlayer FindNearestOtherPlayer(EntityPlayer self)
+        public static EntityPlayer FindNearestAlly(EntityPlayer self)
         {
-            float bestDistSq = float.MaxValue;
             EntityPlayer best = null;
+            
+            if (!self.IsInParty())
+                return null;
+            
+            float bestDistSq = float.MaxValue;
 
-            var players = GameManager.Instance.World.Players.list;
-
-            foreach (var player in players)
+            foreach (var player in GameManager.Instance.World.Players.list)
             {
                 if (player == null || player.entityId == self.entityId)
                     continue;
 
-                float distSq = (player.position - self.position).sqrMagnitude;
+                if (!player.IsInParty())
+                    continue;
+                
+                if (player.Party.PartyID != self.party.PartyID)
+                    continue;
+                
+                var distSq = (player.position - self.position).sqrMagnitude;
 
                 if (distSq < bestDistSq)
                 {

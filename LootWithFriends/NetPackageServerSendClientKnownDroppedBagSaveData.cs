@@ -34,10 +34,15 @@ namespace LootWithFriends
         {
             var saveData = JsonConvert.DeserializeObject<KnownDroppedBagSaveData>(JsonSaveData);
             Log.Out($"NetPackageServerSendClientKnownDroppedBagSaveData ProcessPackage -, {BeingDeleted}, {JsonSaveData}");
-            //let's check if the client knows about the entity by id. if not, we'll create the wp by coordinate
-            var byCoordRef = GameManager.Instance.World.GetEntity(saveData.entityId) == null;
             
-            Waypoints.AddUpdateOrDeleteWaypointForLocalPlayer(saveData, BeingDeleted, byCoordRef);
+            if (BeingDeleted)
+            {
+                Waypoints.DeleteLocalWaypoint(saveData);
+            }
+            else
+            {
+                Waypoints.ClientApplyBagState(saveData);
+            }
         }
 
         public override int GetLength() => 4 + Encoding.UTF8.GetByteCount(JsonSaveData);
