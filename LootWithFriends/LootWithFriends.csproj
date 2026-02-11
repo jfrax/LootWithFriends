@@ -1,0 +1,99 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <!-- Target .NET Framework 4.8 -->
+        <TargetFramework>net48</TargetFramework>
+
+        <!-- Project output -->
+        <OutputType>Library</OutputType>
+        <RootNamespace>LootWithFriends</RootNamespace>
+
+        <!-- Debugging -->
+        <DebugType>full</DebugType>
+        <DebugSymbols>true</DebugSymbols>
+        <Optimize>false</Optimize>
+
+        <!-- Language version -->
+        <LangVersion>7.3</LangVersion>
+        <PackageId>LootWithFriends</PackageId>
+    </PropertyGroup>
+
+    <!-- References to 7DTD assemblies -->
+
+    <!-- ===================================================== -->
+    <!-- LootWithFriends - If your 7D2D Is installed elsewhere, you can put something like this in your .csproj.user file:   -->
+    <!-- ===================================================== -->
+
+    <!--        
+    <Project>
+        <PropertyGroup>                    
+            <SevenDTDManagedDir>H:\SteamLibrary\steamapps\common\7 Days To Die\7DaysToDie_Data\Managed</SevenDTDManagedDir>
+        </PropertyGroup>
+    </Project>
+    -->
+    
+    <PropertyGroup>
+        <!-- Default path if not overridden in .csproj.user -->
+        <SevenDTDManagedDir Condition="'$(SevenDTDManagedDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\7 Days To Die\7DaysToDie_Data\Managed</SevenDTDManagedDir>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Reference Include="Assembly-CSharp">
+            <HintPath>$(SevenDTDManagedDir)\Assembly-CSharp.dll</HintPath>
+        </Reference>
+        <Reference Include="Assembly-CSharp-firstpass">
+            <HintPath>$(SevenDTDManagedDir)\Assembly-CSharp-firstpass.dll</HintPath>
+        </Reference>
+        <Reference Include="LogLibrary">
+            <HintPath>$(SevenDTDManagedDir)\LogLibrary.dll</HintPath>
+        </Reference>
+        <Reference Include="mscorlib">
+            <HintPath>$(SevenDTDManagedDir)\mscorlib.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine">
+            <HintPath>$(SevenDTDManagedDir)\UnityEngine.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.CoreModule">
+            <HintPath>$(SevenDTDManagedDir)\UnityEngine.CoreModule.dll</HintPath>
+        </Reference>
+        <Reference Include="UnityEngine.JSONSerializeModule">
+            <HintPath>$(SevenDTDManagedDir)\UnityEngine.JSONSerializeModule.dll</HintPath>
+        </Reference>
+    </ItemGroup>
+
+
+    <ItemGroup>
+        <PackageReference Include="Lib.Harmony" Version="2.4.2"/>
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.5-beta1"/>
+    </ItemGroup>
+
+
+    <!-- ===================================================== -->
+    <!-- LootWithFriends - Optional Mod Auto Deploy System    -->
+    <!-- ===================================================== -->
+
+    <!--
+      Define deploy targets in your .csproj.user file:
+  
+      <Project>
+        <PropertyGroup>
+          <ModDeployTarget>
+            C:\Program Files (x86)\Steam\steamapps\common\7 Days To Die\Mods\LootWithFriends;
+            \\YourShare\Mods\LootWithFriends
+          </ModDeployTarget>
+        </PropertyGroup>
+      </Project>
+    -->
+
+    <Target Name="DeployModViaXCopy" AfterTargets="Build" Condition="'$(ModDeployTarget)' != ''">
+        <ItemGroup>
+            <_DeployTarget Include="$(ModDeployTarget)"/>
+        </ItemGroup>
+        <Message Text="Deploying LootWithFriends to: %(_DeployTarget.Identity)" Importance="High"/>
+        <Exec Command='xcopy "$(TargetPath)" "%(_DeployTarget.Identity)\" /Y /I /R'/>
+        <Exec Command='xcopy "$(ProjectDir)ModInfo.xml" "%(_DeployTarget.Identity)\" /Y /I /R'/>
+        <Exec Command='xcopy "$(ProjectDir)Preferences.json" "%(_DeployTarget.Identity)\" /Y /I /R'/>
+        <Exec Command='xcopy "$(ProjectDir)Config\*.*" "%(_DeployTarget.Identity)\Config\" /E /Y /I /R'/>
+    </Target>
+
+</Project>
