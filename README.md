@@ -41,7 +41,7 @@ Note that there is also a `Preferences.json` file that lets you set a couple of 
 * **AllowDropWhenNoAlliesPresent** (default true) - If true, and there are no allies presently on the server, it will still drop a loot bag with all the things you have indicated you prefer to drop.
 
 # Installation
-This mod uses code and therefore requires that 7D2D be launched with **EAC (Anticheat) diabled!**
+This mod uses code and therefore requires that 7D2D be launched with **EAC (Anticheat) disabled!**
 Unzip, and put the contents inside your game directory, here `\7 Days To Die\Mods`. In the end, the folder structure should be like this `\7 Days To Die\Mods\LootWithFriends`, with the .dll inside there.
 
 It must be installed on the server(/host), and on all clients using the feature.
